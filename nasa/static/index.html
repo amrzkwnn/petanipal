@@ -3014,9 +3014,29 @@
         const cropsHtml = (farm.crop_history || []).map(c =>
           `<li>${escapeHtml(c.raw_crop_name)} <span class="px-2 py-0.5 rounded-full clay-badge text-[10px] font-bold">${escapeHtml(c.evidence_label)}</span></li>`
         ).join('') || '<li>No crop history confirmed yet.</li>';
-        const obsHtml = (farm.field_observations || []).map(o =>
-          `<li><strong>${escapeHtml(o.event_type)}</strong> (${escapeHtml(o.zone)}): ${escapeHtml(o.observation)}</li>`
-        ).join('') || '<li>No field observations confirmed yet.</li>';
+        function formatObservationDateTime(isoVal) {
+          if (!isoVal) return '';
+          const d = new Date(isoVal);
+          if (Number.isNaN(d.getTime())) return String(isoVal);
+          return d.toLocaleString(state.language === 'ms' ? 'ms-MY' : 'en-MY', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+        }
+        const obsHtml = (farm.field_observations || []).map(o => {
+          const tsLabel = formatObservationDateTime(o.recorded_at || o.observed_at);
+          const rawType = (o.event_type || '').trim();
+          const rawZone = (o.zone || '').trim();
+          const showType = rawType && rawType.toLowerCase() !== 'general' ? rawType : '';
+          const showZone = rawZone && rawZone.toLowerCase() !== 'general' ? rawZone : '';
+          const tags = [showType, showZone].filter(Boolean).map(t => `<span class="font-semibold text-[#1b4d3e]">${escapeHtml(t)}</span>`).join(' · ');
+          const tsPart = tsLabel ? `<span class="text-xs font-semibold text-[#6b756f]">${escapeHtml(tsLabel)}</span>` : '';
+          const metaPrefix = [tsPart, tags].filter(Boolean).join(' · ');
+          return `<li>${metaPrefix ? `${metaPrefix}: ` : ''}${escapeHtml(o.observation)}</li>`;
+        }).join('') || '<li>No field observations confirmed yet.</li>';
         document.getElementById('records-memory-container').innerHTML = `
           <article class="clay-card rounded-[28px] p-5 space-y-2">
             <h3 class="font-bold text-[16px] text-[#1d1b19]">Plot Profile</h3>

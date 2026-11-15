@@ -749,6 +749,9 @@ def test_earth_hold_to_listen_interrupt_and_inline_status():
     assert 'id="custom-crops-input"' not in html
     assert "Plot Profile (" not in html
     assert ">Plot Profile</h3>" in html
+    assert "formatObservationDateTime" in html
+    assert "rawType.toLowerCase() !== 'general'" in html
+    assert "rawZone.toLowerCase() !== 'general'" in html
 
 
 def test_strict_language_lock_prevents_switching(tmp_path):
