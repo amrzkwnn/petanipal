@@ -99,7 +99,13 @@ class MemoryStore:
             return [{"farm_id": default_farm.farm_id, "farm_name": "Farm 001", "locality": default_farm.location.locality}]
         return farms
 
-    def sync_farm_memory(self, farm_id: str, incoming: FarmMemory) -> FarmMemory:
+    def sync_farm_memory(
+        self,
+        farm_id: str,
+        incoming: FarmMemory,
+        user_id: Optional[str] = None,
+        access_token: Optional[str] = None,
+    ) -> FarmMemory:
         """Restore or merge a device-local FarmMemory snapshot so server/AI match the device."""
         path = self._farm_path(farm_id)
         had_saved = path.exists() or (farm_id in self._farms)
@@ -264,6 +270,19 @@ class MemoryStore:
             farm.soil.soil_test_status = TrackedValue(
                 value=SoilTestStatus(raw_val),
                 evidence_label=evidence,
+                confirmed_at=now,
+                source="farmer_voice_confirmed",
+            )
+        elif target_field == "soil.ph":
+            parsed_ph: Optional[float] = None
+            if raw_val != "unknown":
+                try:
+                    parsed_ph = float(raw_val)
+                except (TypeError, ValueError):
+                    parsed_ph = None
+            farm.soil.ph = TrackedValue(
+                value=parsed_ph,
+                evidence_label=(EvidenceLabel.VERIFIED_BY_FARMER if parsed_ph is not None else EvidenceLabel.UNKNOWN),
                 confirmed_at=now,
                 source="farmer_voice_confirmed",
             )

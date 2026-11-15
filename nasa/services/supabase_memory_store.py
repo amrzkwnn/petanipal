@@ -153,6 +153,10 @@ class SupabaseMemoryStore:
             ],
         )
 
+    @staticmethod
+    def _slugify(value: str) -> str:
+        return "".join(ch if ch.isalnum() else "_" for ch in (value or "").strip().lower()).strip("_")
+
     def get_or_create_farm(
         self,
         farm_id: str,
@@ -169,11 +173,17 @@ class SupabaseMemoryStore:
             res = client.table("farms").select("*").eq("id", farm_id).eq("user_id", user_id).execute()
             if res.data:
                 row = res.data[0]
-
-        if row is None and farm_id != "new":
+        elif farm_id == "default":
             res = client.table("farms").select("*").eq("user_id", user_id).limit(1).execute()
             if res.data:
                 row = res.data[0]
+        elif farm_id != "new":
+            target_slug = self._slugify(farm_id)
+            res = client.table("farms").select("*").eq("user_id", user_id).execute()
+            for candidate in res.data or []:
+                if self._slugify(str(candidate.get("farm_name") or "")) == target_slug:
+                    row = candidate
+                    break
 
         if row is None:
             insert_payload: dict[str, Any] = {"user_id": user_id, "locality": "Sungai Petani, Kedah"}
@@ -192,6 +202,97 @@ class SupabaseMemoryStore:
             .execute()
         )
         return self._row_to_farm_memory(row, crops_res.data or [], obs_res.data or [])
+
+    def sync_farm_memory(
+        self,
+        farm_id: str,
+        incoming: FarmMemory,
+        user_id: Optional[str] = None,
+        access_token: Optional[str] = None,
+    ) -> FarmMemory:
+        """Merge device-cached location and unrecorded farmer inputs into the user's Supabase farm row."""
+        if not user_id or not access_token:
+            raise HTTPException(status_code=401, detail="Authentication required.")
+
+        current = self.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
+        real_farm_id = current.farm_id
+        client = self._client_for_token(access_token)
+        now = datetime.now(timezone.utc).isoformat()
+
+        updates: dict[str, Any] = {"updated_at": now}
+        if incoming.location and incoming.location.locality:
+            if (
+                current.location.locality == "Sungai Petani, Kedah"
+                and current.location.latitude is None
+                and incoming.location.locality != "Sungai Petani, Kedah"
+            ):
+                updates["locality"] = incoming.location.locality
+                updates["latitude"] = incoming.location.latitude
+                updates["longitude"] = incoming.location.longitude
+            elif current.location.latitude is None and incoming.location.latitude is not None:
+                updates["latitude"] = incoming.location.latitude
+                updates["longitude"] = incoming.location.longitude
+
+        if (
+            current.irrigation_availability.evidence_label == EvidenceLabel.UNKNOWN
+            and incoming.irrigation_availability.evidence_label == EvidenceLabel.VERIFIED_BY_FARMER
+        ):
+            updates["irrigation_availability"] = incoming.irrigation_availability.model_dump(mode="json")
+
+        if (
+            current.labour_availability.evidence_label == EvidenceLabel.UNKNOWN
+            and incoming.labour_availability.evidence_label == EvidenceLabel.VERIFIED_BY_FARMER
+        ):
+            updates["labour_availability"] = incoming.labour_availability.model_dump(mode="json")
+
+        soil_dict = current.soil.model_dump(mode="json")
+        soil_changed = False
+        for attr in ("texture_feel", "waterlogging_duration", "flooded_last_season", "ph", "soil_test_status", "trouble_spot"):
+            cur_val = getattr(current.soil, attr)
+            inc_val = getattr(incoming.soil, attr)
+            if cur_val.evidence_label == EvidenceLabel.UNKNOWN and inc_val.evidence_label == EvidenceLabel.VERIFIED_BY_FARMER:
+                soil_dict[attr] = inc_val.model_dump(mode="json")
+                soil_changed = True
+        if soil_changed:
+            updates["soil"] = soil_dict
+
+        if len(updates) > 1:
+            client.table("farms").update(updates).eq("id", real_farm_id).eq("user_id", user_id).execute()
+
+        existing_crops = {(c.raw_crop_name.lower(), c.season) for c in current.crop_history}
+        for c in incoming.crop_history:
+            if (c.raw_crop_name.lower(), c.season) not in existing_crops:
+                client.table("crop_history").insert(
+                    {
+                        "farm_id": real_farm_id,
+                        "user_id": user_id,
+                        "season": c.season,
+                        "crop_id": c.crop_id,
+                        "raw_crop_name": c.raw_crop_name,
+                        "evidence_label": c.evidence_label.value,
+                        "confirmed_at": (c.confirmed_at.isoformat() if c.confirmed_at else now),
+                    }
+                ).execute()
+
+        existing_obs = {(o.observation.lower(), o.zone.lower()) for o in current.field_observations}
+        for obs in incoming.field_observations:
+            if (obs.observation.lower(), obs.zone.lower()) not in existing_obs:
+                client.table("field_observations").insert(
+                    {
+                        "farm_id": real_farm_id,
+                        "user_id": user_id,
+                        "zone": obs.zone,
+                        "event_type": obs.event_type,
+                        "affected_crop": obs.affected_crop,
+                        "timing_or_duration": obs.timing_or_duration,
+                        "observation": obs.observation,
+                        "evidence_label": obs.evidence_label.value,
+                        "source": obs.source,
+                        "recorded_at": obs.recorded_at.isoformat(),
+                    }
+                ).execute()
+
+        return self.get_or_create_farm(real_farm_id, user_id=user_id, access_token=access_token)
 
     def delete_farm(
         self,
@@ -312,9 +413,21 @@ class SupabaseMemoryStore:
         elif target_field.startswith("soil."):
             attr = target_field.split(".")[1]
             soil_dict = farm.soil.model_dump(mode="json")
+            stored_val: Any = raw_val
+            stored_evidence = evidence
+            if attr == "ph":
+                if raw_val == "unknown":
+                    stored_val = None
+                    stored_evidence = "unknown"
+                else:
+                    try:
+                        stored_val = float(raw_val)
+                    except (TypeError, ValueError):
+                        stored_val = None
+                        stored_evidence = "unknown"
             soil_dict[attr] = {
-                "value": raw_val,
-                "evidence_label": evidence,
+                "value": stored_val,
+                "evidence_label": stored_evidence,
                 "confirmed_at": now,
                 "source": "farmer_voice_confirmed",
             }

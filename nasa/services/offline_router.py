@@ -81,13 +81,18 @@ def route_offline(
         for w in ["what if", "kalau musim depan", "drier", "wetter", "lebih kering", "lebih basah", "kemarau"]
     ):
         opts = (comparison_context or {}).get("options", [])
+        geo = (comparison_context or {}).get("geotanih_context") or {}
+        geo_note = (
+            geo.get("limitation_summary_ms" if is_ms else "limitation_summary_en")
+            or farm.location.locality
+        )
         top_names = ", ".join(o.get("name_ms" if is_ms else "name_en", "") for o in opts[:2]) or (
             "kacang tanah dan jagung" if is_ms else "groundnut and sweet corn"
         )
         reply = (
-            f"Jika musim depan lebih kering atau hujan berubah, tanaman dengan keperluan air sederhana seperti {top_names} mempunyai risiko tekanan air yang berbeza; pastikan sungkupan organik dan sumber air simpanan. Ini adalah senario sejarah, bukan ramalan cuaca."
+            f"Di {farm.location.locality}, jika musim depan lebih kering atau basah, pilihan seperti {top_names} bergantung pada {geo_note} dan sumber air petak anda; sungkupan organik membantu kurangkan risiko. Ini adalah senario sejarah, bukan ramalan cuaca."
             if is_ms
-            else f"If next season shifts drier or wetter, options like {top_names} trade off water demand against drainage risk; mulching and backup water access reduce establishment stress. This is a historical scenario, not a weather forecast."
+            else f"For {farm.location.locality}, if next season turns drier or wetter, choices like {top_names} trade off against {geo_note} and your plot's water access; organic mulch reduces stress. This is a historical scenario, not a weather forecast."
         )
         return LLMExtractionResult(
             question_type=OpenQuestionType.WHAT_IF_SCENARIO,
@@ -95,8 +100,9 @@ def route_offline(
             needs_confirmation=False,
             answer_basis=[
                 "NASA POWER 30-day agroclimatology scenario",
+                f"GeoTanih Soil Profile ({geo.get('district', farm.location.locality)})",
                 "Reviewed Crop Library",
-                "Farm Memory",
+                f"Farm Memory ({farm.farm_id})",
             ],
             missing_info=["Confirmed backup irrigation capacity"],
         )
@@ -118,10 +124,19 @@ def route_offline(
             else ("kacang tanah" if is_ms else "groundnut")
         )
         family_label = matched.family if matched else "Fabaceae"
+        geo = (comparison_context or {}).get("geotanih_context") or {}
+        last_crop = (comparison_context or {}).get("last_crop") or (
+            farm.crop_history[-1].raw_crop_name if farm.crop_history else ("tidak diketahui" if is_ms else "unknown")
+        )
+        obs_note = (
+            f" termasuk {len(farm.field_observations)} rekod pemerhatian petak"
+            if is_ms and farm.field_observations
+            else (f" plus {len(farm.field_observations)} recorded plot note(s)" if farm.field_observations else "")
+        )
         reply = (
-            f"Pilihan {crop_label} ({family_label}) dibandingkan berdasarkan keluarga botani berbeza untuk memutuskan kitaran perosak, keperluan air tanaman, serta rekod saliran petak anda."
+            f"Untuk petak anda di {farm.location.locality}, {crop_label} ({family_label}) dibandingkan selepas tanaman lepas ({last_crop}) dengan mengambil kira corak hujan NASA, profil tanah daerah ({geo.get('dominant_texture', 'loam')}), serta rekod saliran petak anda{obs_note}."
             if is_ms
-            else f"{crop_label.title()} ({family_label}) is compared based on botanical family rotation to break pest cycles, crop water requirement, and your recorded plot drainage."
+            else f"For your plot in {farm.location.locality}, {crop_label.title()} ({family_label}) is compared after your previous crop ({last_crop}) using recent rainfall patterns, local soil drainage ({geo.get('dominant_texture', 'loam')}), and your saved plot notes{obs_note}."
         )
         return LLMExtractionResult(
             question_type=OpenQuestionType.RESULT_EXPLANATION,
@@ -130,7 +145,8 @@ def route_offline(
             answer_basis=[
                 f"Reviewed Crop Library: {matched.crop_id if matched else 'kacang_tanah'}",
                 "NASA POWER Climate Summary",
-                "Farm Memory",
+                f"GeoTanih Soil Profile ({geo.get('district', farm.location.locality)})",
+                f"Farm Memory ({farm.farm_id})",
             ],
             missing_info=[],
         )
@@ -356,16 +372,29 @@ def route_offline(
         )
 
     if any(f in lower for f in farming_terms):
+        geo = (comparison_context or {}).get("geotanih_context") or {}
+        top_opt = ((comparison_context or {}).get("options") or [{}])[0]
+        top_name = top_opt.get("name_ms" if is_ms else "name_en") or ""
+        hint = (
+            f" Pilihan utama semasa ialah {top_name}."
+            if is_ms and top_name
+            else (f" The current top option is {top_name}." if top_name else "")
+        )
         fallback_reply = (
-            "Saya sedia membantu membandingkan pilihan giliran tanaman dan merekodkan pemerhatian kebun anda."
+            f"Saya menggunakan data cuaca petak anda di {farm.location.locality}, profil tanah tempatan, dan memori kebun ini untuk membandingkan giliran tanaman.{hint}"
             if is_ms
-            else "I can help compare crop rotation options and log observations for your plot."
+            else f"I use your plot's rainfall pattern in {farm.location.locality}, local soil profile, and this farm's saved memory to compare crop options.{hint}"
         )
         return LLMExtractionResult(
             question_type=OpenQuestionType.GENERAL_FARMING,
             assistant_text=fallback_reply,
             needs_confirmation=False,
-            answer_basis=["Farm Memory", "Reviewed Crop Library"],
+            answer_basis=[
+                "NASA POWER Climate Summary",
+                f"GeoTanih Soil Profile ({geo.get('district', farm.location.locality)})",
+                f"Farm Memory ({farm.farm_id})",
+                "Reviewed Crop Library",
+            ],
             missing_info=[],
         )
 

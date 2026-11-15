@@ -799,3 +799,223 @@ def test_strict_language_lock_prevents_switching(tmp_path):
     assert tool_out_en["output"]["locked_language"] == "en"
     assert "Respond strictly in English" in tool_out_en["output"]["language_rule"]
 
+
+def test_geotanih_coordinate_and_locality_resolution():
+    from services.geotanih_store import load_geotanih_context
+
+    mada_by_coords = load_geotanih_context("My Custom GPS Plot", lat=6.12, lon=100.37)
+    assert mada_by_coords["id"] == "kedah_kota_setar_mada"
+    assert mada_by_coords["dominant_texture"] == "clay"
+    assert mada_by_coords["drainage_tendency"] == "often_waterlogged"
+
+    inland_by_coords = load_geotanih_context("Inland Orchard", lat=5.82, lon=100.74)
+    assert inland_by_coords["id"] == "kedah_baling_sik_inland"
+    assert inland_by_coords["dominant_texture"] == "sandy"
+    assert inland_by_coords["drainage_tendency"] == "drains_fast"
+
+    mada_by_name = load_geotanih_context("Kubang Pasu, Kedah")
+    assert mada_by_name["id"] == "kedah_kota_setar_mada"
+
+
+def test_per_farm_memory_isolation_and_three_pillar_grounding(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    import main as main_mod
+    from schemas import LanguageCode
+    from services.climate_service import NasaPowerClimateService
+    from services.library_store import LibraryStore
+    from services.memory_store import MemoryStore
+    from services.realtime_voice import OpenAIRealtimeService
+    from services.rotation_engine import compare_rotations
+
+    libs = LibraryStore(Path("nasa/data"))
+    store = MemoryStore(tmp_path / "isolated_farms")
+    clim_svc = NasaPowerClimateService(cache_dir=Path("nasa/storage/climate_cache"))
+
+    # Farm A: Kota Setar (heavy clay / MADA) with chilli history + low flooding corner
+    store.update_location("farm_mada", "My MADA Custom Plot", 6.12, 100.37)
+    store.apply_confirmed_fact("farm_mada", "crop_history", {"crop_id": "chilli_open_field", "raw_crop_name": "chilli"})
+    store.apply_confirmed_fact("farm_mada", "soil.waterlogging_duration", "over_2_days")
+    store.apply_confirmed_fact("farm_mada", "soil.trouble_spot", "low_flooding_area")
+    store.apply_confirmed_fact(
+        "farm_mada",
+        "field_observations",
+        {
+            "zone": "lower corner",
+            "event_type": "flooding",
+            "observation": "Lower corner flooded for 3 days after heavy rain",
+        },
+    )
+
+    # Farm B: Sik Inland (fast-draining sandy) with groundnut history + dry corner + acidic pH
+    store.update_location("farm_sik", "Sik Inland Slope", 5.82, 100.74)
+    store.apply_confirmed_fact("farm_sik", "crop_history", {"crop_id": "kacang_tanah", "raw_crop_name": "groundnut"})
+    store.apply_confirmed_fact("farm_sik", "irrigation_availability", "no")
+    store.apply_confirmed_fact("farm_sik", "soil.trouble_spot", "dry_area")
+    store.apply_confirmed_fact("farm_sik", "soil.ph", "4.9")
+    store.apply_confirmed_fact(
+        "farm_sik",
+        "field_observations",
+        {
+            "zone": "upper terrace",
+            "event_type": "drought",
+            "observation": "Upper beds dry out fast after afternoon sun",
+        },
+    )
+
+    farm_mada = store.get_or_create_farm("farm_mada")
+    farm_sik = store.get_or_create_farm("farm_sik")
+
+    # 1. Strict FarmMemory isolation
+    assert len(farm_mada.field_observations) == 1
+    assert "flooded for 3 days" in farm_mada.field_observations[0].observation
+    assert len(farm_sik.field_observations) == 1
+    assert "Upper beds dry out fast" in farm_sik.field_observations[0].observation
+    assert farm_mada.crop_history[0].raw_crop_name == "chilli"
+    assert farm_sik.crop_history[0].raw_crop_name == "groundnut"
+
+    # 2. Rotation comparison resolves distinct GeoTanih + NASA + FarmMemory per farm
+    clim_mada = clim_svc.get_summary(6.12, 100.37, allow_network=False)
+    clim_sik = clim_svc.get_summary(5.82, 100.74, allow_network=False)
+    comp_mada = compare_rotations(farm_mada, libs, climate=clim_mada, candidate_crop_names=["chilli", "groundnut"])
+    comp_sik = compare_rotations(farm_sik, libs, climate=clim_sik, candidate_crop_names=["chilli", "groundnut"])
+
+    assert comp_mada["geotanih_context"]["id"] == "kedah_kota_setar_mada"
+    assert comp_sik["geotanih_context"]["id"] == "kedah_baling_sik_inland"
+    assert comp_mada["last_crop"] == "chilli"
+    assert comp_sik["last_crop"] == "groundnut"
+    # On Farm B (acidic pH 4.9 + sandy dry area), chilli risk mentions both acidic soil pH and dry corner
+    sik_chilli = [o for o in comp_sik["options"] if o["crop_id"] == "chilli_open_field"][0]
+    assert any("ph" in r.lower() or "acid" in r.lower() for r in sik_chilli["risks_en"])
+
+    # 3. Realtime instructions & tool output carry all 3 pillars isolated per farm
+    rt = OpenAIRealtimeService.__new__(OpenAIRealtimeService)
+    rt.model = "gpt-realtime-2.1-mini"
+    rt.voice = "alloy"
+    rt.climate_service = clim_svc
+
+    mada_instr = rt.build_session_config(
+        language=LanguageCode.EN,
+        libraries=libs,
+        memory_store=store,
+        farm_id="farm_mada",
+        allow_network=False,
+    )["instructions"]
+    assert "Isolated Farm ID 'farm_mada'" in mada_instr or "isolated Farm ID 'farm_mada'" in mada_instr
+    assert "[1. NASA POWER DATA" in mada_instr
+    assert "[2. GEOTANIH DOA SOIL DATA" in mada_instr
+    assert "[3. THIS FARM'S ISOLATED FARM MEMORY ('farm_mada')]" in mada_instr
+    assert "kedah_kota_setar_mada" in mada_instr
+    assert "Lower corner flooded for 3 days after heavy rain" in mada_instr
+    assert "Upper beds dry out fast" not in mada_instr
+
+    sik_tool = rt.execute_realtime_tool(
+        tool_name="get_nasa_climate_and_rotation",
+        arguments={"scenario": "normal", "suggested_crop": "sweet corn"},
+        farm_id="farm_sik",
+        session_id="sess_iso",
+        libraries=libs,
+        memory_store=store,
+        language=LanguageCode.EN,
+        allow_network=False,
+    )["output"]
+    g_sik = sik_tool["three_pillar_grounding"]
+    assert g_sik["farm_identity"]["farm_id"] == "farm_sik"
+    assert g_sik["geotanih_soil_data"]["zone_id"] == "kedah_baling_sik_inland"
+    assert g_sik["farm_memory_inputs"]["last_crop"] == "groundnut"
+    assert g_sik["nasa_power_data"]["rain_30d_mm"] is not None
+
+    # 4. /api/voice/chat uses the active farm's 3 pillars in offline & OpenAI modes
+    monkeypatch.setattr(main_mod, "memory_store", store)
+    monkeypatch.setattr(main_mod, "local_memory_store", store)
+    monkeypatch.setattr(main_mod, "_has_real_openai", lambda: False)
+    monkeypatch.setenv("NASA_POWER_ALLOW_NETWORK", "false")
+    client = TestClient(main_mod.app)
+
+    chat_mada = client.post(
+        "/api/voice/chat",
+        json={
+            "farm_id": "farm_mada",
+            "session_id": "sess_mada",
+            "language": "en",
+            "text": "Why is groundnut compared for this plot?",
+        },
+    ).json()
+    assert "My MADA Custom Plot" in chat_mada["assistant_text"]
+    assert "chilli" in chat_mada["assistant_text"].lower()
+    assert any("GeoTanih" in b for b in chat_mada["answer_basis"])
+    assert any("farm_mada" in b for b in chat_mada["answer_basis"])
+    assert any("NASA POWER" in b for b in chat_mada["answer_basis"])
+    assert "Sik Inland Slope" not in chat_mada["assistant_text"]
+
+    # 5. SupabaseMemoryStore isolates named slug farms rather than returning limit(1)
+    from services.supabase_memory_store import SupabaseMemoryStore
+
+    class FakeTable:
+        def __init__(self, rows: list[dict], table_name: str) -> None:
+            self.rows = rows
+            self.table_name = table_name
+            self.filters: dict[str, object] = {}
+            self.lim: int | None = None
+            self.insert_payload: dict | None = None
+
+        def select(self, *_args):
+            return self
+
+        def eq(self, col: str, val: object):
+            self.filters[col] = val
+            return self
+
+        def limit(self, n: int):
+            self.lim = n
+            return self
+
+        def order(self, *_args):
+            return self
+
+        def insert(self, payload: dict):
+            self.insert_payload = payload
+            return self
+
+        def execute(self):
+            if self.insert_payload is not None:
+                row = {"id": f"uuid-{len(self.rows) + 1}", **self.insert_payload}
+                self.rows.append(row)
+                return type("Res", (), {"data": [row]})()
+            matched = [
+                r for r in self.rows
+                if all(r.get(k) == v for k, v in self.filters.items())
+            ]
+            if self.lim is not None:
+                matched = matched[: self.lim]
+            return type("Res", (), {"data": matched})()
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.tables = {
+                "farms": [
+                    {"id": "11111111-1111-1111-1111-111111111111", "user_id": "u1", "farm_name": "Sunrise Hill Farm", "locality": "Sungai Petani, Kedah"},
+                    {"id": "22222222-2222-2222-2222-222222222222", "user_id": "u1", "farm_name": "Green Valley Plot", "locality": "Sik, Kedah"},
+                ],
+                "crop_history": [],
+                "field_observations": [],
+            }
+
+        def table(self, name: str):
+            return FakeTable(self.tables[name], name)
+
+    fake_sb = SupabaseMemoryStore.__new__(SupabaseMemoryStore)
+    fake_sb.url = "https://example.supabase.co"
+    fake_sb.key = "dummy"
+    fake_sb._pending = {}
+    fake_client = FakeClient()
+    fake_sb._client_for_token = lambda _tok: fake_client  # type: ignore[method-assign]
+
+    gv = fake_sb.get_or_create_farm("green_valley_plot", user_id="u1", access_token="tok")
+    assert gv.farm_id == "22222222-2222-2222-2222-222222222222"
+    assert gv.location.locality == "Sik, Kedah"
+
+    new_slug = fake_sb.get_or_create_farm("north_terrace_plot", user_id="u1", access_token="tok")
+    assert new_slug.farm_id == "uuid-3"
+    assert fake_client.tables["farms"][-1]["farm_name"] == "North Terrace Plot"
+
+

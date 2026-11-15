@@ -184,7 +184,11 @@ def get_realtime_service() -> OpenAIRealtimeService:
 
 
 def _geotanih_flags_for(farm: FarmMemory) -> set[str]:
-    geo = load_geotanih_context(farm.location.locality or "Sungai Petani, Kedah")
+    geo = load_geotanih_context(
+        farm.location.locality or "Sungai Petani, Kedah",
+        lat=farm.location.latitude,
+        lon=farm.location.longitude,
+    )
     return set(geo.get("flags", []))
 
 
@@ -384,7 +388,12 @@ async def sync_farm_memory(
     user_id, access_token = auth
     store = _store_for(access_token)
     if hasattr(store, "sync_farm_memory"):
-        return store.sync_farm_memory(farm_id=farm_id, incoming=payload)
+        return store.sync_farm_memory(
+            farm_id=farm_id,
+            incoming=payload,
+            user_id=user_id,
+            access_token=access_token,
+        )
     return store.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
 
 

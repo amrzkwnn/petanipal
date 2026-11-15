@@ -16,17 +16,27 @@ def load_geotanih_context(
     locality_or_lat: Union[str, float, None] = None,
     lon: Optional[float] = None,
     *,
+    lat: Optional[float] = None,
     allow_live: bool = False,
     data_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
+    """Resolve GeoTanih district/coordinate soil suitability context."""
     base = data_dir or DATA_DIR
     raw = json.loads((base / "geotanih_kedah.json").read_text(encoding="utf-8"))
     matched: Optional[Dict[str, Any]] = None
 
-    if allow_live and isinstance(locality_or_lat, (int, float)) and isinstance(lon, (int, float)):
+    resolved_lat: Optional[float] = (
+        float(locality_or_lat)
+        if isinstance(locality_or_lat, (int, float))
+        else (float(lat) if isinstance(lat, (int, float)) else None)
+    )
+    resolved_lon: Optional[float] = float(lon) if isinstance(lon, (int, float)) else None
+    locality_str: Optional[str] = locality_or_lat if isinstance(locality_or_lat, str) else None
+
+    if allow_live and resolved_lat is not None and resolved_lon is not None:
         try:
             params = {
-                "geometry": f"{float(lon)},{float(locality_or_lat)}",
+                "geometry": f"{resolved_lon},{resolved_lat}",
                 "geometryType": "esriGeometryPoint",
                 "inSR": "4326",
                 "spatialRel": "esriSpatialRelIntersects",
@@ -45,7 +55,7 @@ def load_geotanih_context(
                     return {
                         "id": "geotanih_live_arcgis",
                         "state": str(attrs.get("NEGERI") or "Kedah"),
-                        "district": str(attrs.get("DAERAH") or "Sungai Petani"),
+                        "district": str(attrs.get("DAERAH") or locality_str or "Sungai Petani"),
                         "soil_class": soil_cls,
                         "dominant_texture": "loam",
                         "drainage_tendency": "sometimes_stays_wet" if flags else "drains_well",
@@ -59,19 +69,8 @@ def load_geotanih_context(
         except Exception:
             matched = None
 
-    if isinstance(locality_or_lat, (int, float)) and isinstance(lon, (int, float)):
-        lat = float(locality_or_lat)
-        lon_f = float(lon)
-        for zone in raw.get("zones", []):
-            bbox = zone.get("bbox", {})
-            if (
-                bbox.get("lat_min", -90) <= lat <= bbox.get("lat_max", 90)
-                and bbox.get("lon_min", -180) <= lon_f <= bbox.get("lon_max", 180)
-            ):
-                matched = zone
-                break
-    elif isinstance(locality_or_lat, str) and locality_or_lat.strip():
-        loc_lower = locality_or_lat.lower()
+    if locality_str and locality_str.strip():
+        loc_lower = locality_str.lower()
         district_aliases = {
             "sungai petani": "kedah_kuala_muda_sp",
             "kuala muda": "kedah_kuala_muda_sp",
@@ -91,14 +90,29 @@ def load_geotanih_context(
         for alias, target_id in district_aliases.items():
             if alias in loc_lower and target_id in zones_by_id:
                 matched = dict(zones_by_id[target_id])
-                matched["selected_district"] = locality_or_lat.strip()
+                matched["selected_district"] = locality_str.strip()
                 break
-        if matched is None:
-            for zone in raw.get("zones", []):
-                state_lower = zone.get("state", "").lower()
-                if state_lower and state_lower in loc_lower:
-                    matched = zone
-                    break
+
+    if matched is None and resolved_lat is not None and resolved_lon is not None:
+        for zone in raw.get("zones", []):
+            bbox = zone.get("bbox", {})
+            if (
+                bbox.get("lat_min", -90) <= resolved_lat <= bbox.get("lat_max", 90)
+                and bbox.get("lon_min", -180) <= resolved_lon <= bbox.get("lon_max", 180)
+            ):
+                matched = dict(zone)
+                if locality_str and locality_str.strip():
+                    matched["selected_district"] = locality_str.strip()
+                break
+
+    if matched is None and locality_str and locality_str.strip():
+        loc_lower = locality_str.lower()
+        for zone in raw.get("zones", []):
+            state_lower = zone.get("state", "").lower()
+            if state_lower and state_lower in loc_lower:
+                matched = dict(zone)
+                matched["selected_district"] = locality_str.strip()
+                break
 
     if matched is not None:
         return {

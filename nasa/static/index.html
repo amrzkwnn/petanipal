@@ -1309,7 +1309,12 @@
     }
 
     async function selectFarm(farmId, closeFarmCard = true) {
+      const farmChanged = Boolean(state.farmId && state.farmId !== farmId);
       state.farmId = farmId;
+      state.pendingConfirmation = null;
+      state.activeRealtimeTranscript = '';
+      const confirmBox = document.getElementById('pending-confirm-box');
+      if (confirmBox) confirmBox.classList.add('hidden');
       try { localStorage.setItem(DEVICE_ACTIVE_FARM_KEY, farmId); } catch (e) {}
       try {
         const farm = await syncDeviceFarmToServer(farmId);
@@ -1340,7 +1345,20 @@
         toggleFarmSelectionCard();
       }
       await runComparison();
-      notifyRealtimeContextRefresh();
+
+      // Backend /ws/voice/{farm_id} binds farm_id in its socket URL, so reconnect if switching farms on local WS.
+      if (farmChanged && state.realtimeWs && !state.directOpenAiWs) {
+        const resumeHandsFree = state.isLiveHandsFree;
+        stopLiveConversation();
+        if (resumeHandsFree) {
+          state.isLiveHandsFree = true;
+          liveSubMode = 'listening';
+          setListeningIndicator('listening');
+          startLiveConversation();
+          return;
+        }
+      }
+      await notifyRealtimeContextRefresh();
     }
 
     function toggleLanguage() {
@@ -1383,6 +1401,7 @@
     async function submitTextUtterance(text) {
       if (state.farmCardOpen) toggleFarmSelectionCard();
       try {
+        try { await syncDeviceFarmToServer(state.farmId); } catch (e) {}
         const res = await fetch('/api/voice/chat', {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -2734,6 +2753,7 @@
       if (state.realtimeWs && state.realtimeWs.readyState === WebSocket.OPEN) {
         try {
           if (state.directOpenAiWs) {
+            try { await syncDeviceFarmToServer(state.farmId); } catch (e) {}
             const res = await fetch('/api/voice/realtime-session', {
               method: 'POST',
               headers: authHeaders({ 'Content-Type': 'application/json' }),

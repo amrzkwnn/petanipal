@@ -142,12 +142,61 @@ def _score_crop(
         actions_ms.append(
             "Gunakan sungkupan dan sediakan air siraman tambahan semasa hari kering."
         )
+    elif (tex_str == "sandy" or geotanih.get("drainage_tendency") == "drains_fast") and water_need in ("high", "medium_high"):
+        water_fit_level = "Watch"
+        if risk_level == "Low":
+            risk_level = "Medium"
+        water_fit_en.append(
+            "Fast-draining sandy/inland soil loses moisture quickly for this water-demanding crop."
+        )
+        water_fit_ms.append(
+            "Tanah berpasir/pedalaman yang cepat kering menyebabkan kelembapan cepat hilang bagi tanaman yang perlukan banyak air ini."
+        )
+        actions_en.append(
+            "Apply organic mulch and water consistently during early growth."
+        )
+        actions_ms.append(
+            "Gunakan sungkupan organik dan siram secara konsisten pada fasa awal pertumbuhan."
+        )
     else:
         water_fit_en.append(
             "Matches recent rainfall and how well this plot drains."
         )
         water_fit_ms.append(
             "Sesuai dengan keadaan hujan kebelakangan ini dan saliran petak ini."
+        )
+
+    trouble_spot = str(memory.soil.trouble_spot.value or "unknown")
+    if trouble_spot == "low_flooding_area" and flood_tol == "low":
+        if risk_level == "Low":
+            risk_level = "Medium"
+        risks_en.append(
+            "Farmer-noted low flooding corner in this plot increases waterlogging risk."
+        )
+        risks_ms.append(
+            "Sudut rendah yang mudah bertakung air di petak ini meningkatkan risiko akar lemas."
+        )
+    elif trouble_spot == "dry_area" and water_need in ("high", "medium_high"):
+        if risk_level == "Low":
+            risk_level = "Medium"
+        risks_en.append(
+            "Farmer-noted dry corner in this plot may stress high-water crops."
+        )
+        risks_ms.append(
+            "Bahagian petak yang cepat kering boleh memberi tekanan kepada tanaman yang perlukan banyak air."
+        )
+    elif trouble_spot == "slope":
+        actions_en.append("Plant along contours or mulch slopes to reduce soil washout during heavy rain.")
+        actions_ms.append("Tanam mengikut kontur atau letak sungkupan di kawasan cerun untuk elak hakisan.")
+
+    if memory.soil.ph.value is not None and float(memory.soil.ph.value) < 5.2 and crop.crop_id != "nanas":
+        if risk_level == "Low":
+            risk_level = "Medium"
+        risks_en.append(
+            f"Recorded acidic soil pH ({memory.soil.ph.value}) may limit nutrient uptake; consider checking lime needs with DOA."
+        )
+        risks_ms.append(
+            f"pH tanah berasid ({memory.soil.ph.value}) boleh mengehadkan serapan nutrien; semak keperluan pengapuran dengan Jabatan Pertanian."
         )
 
     if last_crop_profile:
@@ -373,7 +422,11 @@ def compare_rotations(
             lat, lon, scenario=scenario, allow_network=False
         )
 
-    geotanih = load_geotanih_context(memory.location.locality or "Sungai Petani, Kedah")
+    geotanih = load_geotanih_context(
+        memory.location.locality or "Sungai Petani, Kedah",
+        lat=memory.location.latitude,
+        lon=memory.location.longitude,
+    )
     last_crop_name = memory.crop_history[-1].raw_crop_name if memory.crop_history else None
     last_crop_id = memory.crop_history[-1].crop_id if memory.crop_history else None
     last_crop_profile = (
@@ -480,4 +533,93 @@ def compare_rotations(
         "recorded_observations": recorded_observations,
         "advisory_disclaimer_en": "Options compare agronomic trade-offs for your plot; final crop selection remains the farmer's decision.",
         "advisory_disclaimer_ms": "Pilihan membandingkan kesesuaian agronomi bagi petak anda; keputusan akhir tanaman kekal di tangan petani.",
+    }
+
+
+def _tracked_display(tracked: Any) -> str:
+    val = getattr(tracked, "value", None)
+    raw = val.value if hasattr(val, "value") else val
+    ev = getattr(tracked, "evidence_label", EvidenceLabel.UNKNOWN)
+    ev_str = ev.value if isinstance(ev, EvidenceLabel) else str(ev)
+    if raw in (None, "unknown") or ev_str == EvidenceLabel.UNKNOWN.value:
+        return "unknown"
+    return f"{raw} ({ev_str})"
+
+
+def build_farm_grounding_snapshot(
+    memory: FarmMemory,
+    comparison: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build a unified 3-pillar grounding dict combining NASA POWER, GeoTanih, and per-farm memory."""
+    clim = comparison.get("climate_summary") or {}
+    geo = comparison.get("geotanih_context") or {}
+    crop_hist = [
+        {
+            "season": entry.season,
+            "crop_id": entry.crop_id,
+            "crop_name": entry.raw_crop_name,
+            "issue": entry.issue,
+            "evidence_label": entry.evidence_label.value,
+        }
+        for entry in memory.crop_history
+    ]
+    observations = [
+        {
+            "event_type": obs.event_type,
+            "zone": obs.zone,
+            "affected_crop": obs.affected_crop,
+            "timing_or_duration": obs.timing_or_duration,
+            "observation": obs.observation,
+            "evidence_label": obs.evidence_label.value,
+        }
+        for obs in memory.field_observations
+    ]
+    confirmed_facts = {
+        "irrigation": _tracked_display(memory.irrigation_availability),
+        "labour": _tracked_display(memory.labour_availability),
+        "soil_texture_feel": _tracked_display(memory.soil.texture_feel),
+        "waterlogging_duration": _tracked_display(memory.soil.waterlogging_duration),
+        "flooded_last_season": _tracked_display(memory.soil.flooded_last_season),
+        "soil_ph": _tracked_display(memory.soil.ph),
+        "soil_test_status": _tracked_display(memory.soil.soil_test_status),
+        "trouble_spot": _tracked_display(memory.soil.trouble_spot),
+        "priorities": memory.priorities.model_dump(mode="json"),
+    }
+    return {
+        "farm_identity": {
+            "farm_id": memory.farm_id,
+            "locality": memory.location.locality,
+            "latitude": memory.location.latitude,
+            "longitude": memory.location.longitude,
+        },
+        "nasa_power_data": {
+            "source": clim.get("source"),
+            "rain_7d_mm": clim.get("rain_7d_mm"),
+            "rain_30d_mm": clim.get("rain_30d_mm"),
+            "heavy_rain_days_30d": clim.get("heavy_rain_days_30d"),
+            "longest_dry_spell_days": clim.get("longest_dry_spell_days"),
+            "avg_max_temp_c": clim.get("avg_max_temp_c"),
+            "hot_days_30d": clim.get("hot_days_30d"),
+            "plain_insights_en": clim.get("plain_insights_en", []),
+            "plain_insights_ms": clim.get("plain_insights_ms", []),
+        },
+        "geotanih_soil_data": {
+            "district": geo.get("selected_district") or geo.get("district") or memory.location.locality,
+            "zone_id": geo.get("id"),
+            "soil_class": geo.get("soil_class"),
+            "dominant_texture": geo.get("dominant_texture"),
+            "drainage_tendency": geo.get("drainage_tendency"),
+            "limitation_summary_en": geo.get("limitation_summary_en"),
+            "limitation_summary_ms": geo.get("limitation_summary_ms"),
+            "flags": geo.get("flags", []),
+            "evidence_label": str(geo.get("evidence_label", "estimated_from_map")),
+        },
+        "farm_memory_inputs": {
+            "last_crop": comparison.get("last_crop", "unknown"),
+            "crop_history": crop_hist,
+            "confirmed_profile": confirmed_facts,
+            "field_observations": observations,
+            "evidence_coverage": comparison.get("evidence_coverage", {}),
+            "unknown_gaps": comparison.get("missing_info", []),
+        },
     }
