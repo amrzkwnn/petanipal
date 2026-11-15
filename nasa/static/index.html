@@ -1708,6 +1708,7 @@
       const analyser = liveAudioCtx.createAnalyser();
       analyser.fftSize = 512;
       liveFilterGraph.compressor.connect(analyser);
+      analyser.connect(liveFilterGraph.silentGain);
       const dataArr = new Float32Array(analyser.fftSize);
 
       let speaking = false;
@@ -1747,8 +1748,23 @@
             if (res.ok) {
               const turn = await res.json();
               renderVoiceTurn(turn);
+              busyTurn = false;
+              if (state.isListening && !turn.tts_audio_base64) {
+                liveSubMode = 'listening';
+                setListeningIndicator('listening');
+              }
+              return;
             }
-          } catch (err) {}
+            let errDetail = `Voice service unavailable (${res.status})`;
+            try {
+              const errJson = await res.json();
+              if (errJson?.detail) errDetail = errJson.detail;
+            } catch (e) {}
+            document.getElementById('reassurance-status-text').textContent = errDetail;
+          } catch (err) {
+            document.getElementById('reassurance-status-text').textContent =
+              state.language === 'ms' ? 'Sambungan suara terganggu. Cuba taip soalan anda.' : 'Voice request failed. Try typing your question.';
+          }
           busyTurn = false;
           if (state.isListening) {
             liveSubMode = 'listening';

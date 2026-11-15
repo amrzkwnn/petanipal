@@ -463,6 +463,11 @@ async def voice_turn(
     include_tts: Annotated[bool, Form()] = True,
 ) -> VoiceTurnResponse:
     """Accepts one spoken answer, transcribes in-memory, and discards raw audio immediately."""
+    if not _has_real_openai():
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY is not configured on this server. Add it in Vercel Environment Variables to enable voice.",
+        )
     user_id, access_token = auth
     voice = get_voice_service()
     audio_bytes = await audio.read()
