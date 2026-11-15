@@ -513,6 +513,127 @@ def test_device_local_farm_memory_sync_restores_for_ai(tmp_path):
     assert Path("nasa/stitch_design/04-pal-rotation-detail.html").exists()
 
 
+def test_local_guest_mode_allows_running_without_login_and_enforces_auth_on_vercel(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+    import main as main_mod
+    from services.memory_store import MemoryStore
+    from services.supabase_memory_store import SupabaseMemoryStore
+
+    class DummySupabaseStore(SupabaseMemoryStore):
+        def __init__(self) -> None:
+            self.url = "https://example.supabase.co"
+            self.key = "dummy-key"
+            self._pending = {}
+
+        def verify_user(self, access_token: str) -> str:
+            raise AssertionError("Supabase verify_user should not be called in local guest mode without token")
+
+        def list_farms(self, user_id=None, access_token=None):
+            raise AssertionError("Supabase list_farms should not be called in local guest mode")
+
+    guest_store = MemoryStore(storage_dir=tmp_path / "local_guest")
+    monkeypatch.setattr(main_mod, "memory_store", DummySupabaseStore())
+    monkeypatch.setattr(main_mod, "local_memory_store", guest_store)
+    monkeypatch.setattr(main_mod, "_is_vercel", False)
+    monkeypatch.delenv("ALLOW_LOCAL_GUEST", raising=False)
+    monkeypatch.setenv("NASA_POWER_ALLOW_NETWORK", "false")
+
+    client = TestClient(main_mod.app)
+
+    cfg = client.get("/api/config").json()
+    assert cfg["supabase_enabled"] is True
+    assert cfg["allow_local_guest"] is True
+
+    farms = client.get("/api/farms")
+    assert farms.status_code == 200
+    assert len(farms.json()["farms"]) >= 1
+
+    farm = client.get("/api/farms/guest_plot_1")
+    assert farm.status_code == 200
+    assert farm.json()["farm_id"] == "guest_plot_1"
+
+    loc = client.post(
+        "/api/farms/guest_plot_1/location",
+        json={"locality": "Kulim, Kedah", "latitude": 5.36, "longitude": 100.56},
+    )
+    assert loc.status_code == 200
+    assert loc.json()["location"]["locality"] == "Kulim, Kedah"
+
+    cmp_res = client.post(
+        "/api/compare",
+        json={"farm_id": "guest_plot_1", "candidate_crops": ["chilli", "okra", "jagung manis"], "scenario": "normal"},
+    )
+    assert cmp_res.status_code == 200
+    assert len(cmp_res.json()["options"]) == 3
+
+    # Confirm pending fact path uses local_memory_store without login
+    monkeypatch.setattr(main_mod, "_has_real_openai", lambda: False)
+    chat_res = client.post(
+        "/api/voice/chat",
+        json={
+            "farm_id": "guest_plot_1",
+            "session_id": "sess_guest_1",
+            "language": "ms",
+            "text": "Bahagian rendah air bertakung 3 hari lepas hujan",
+            "current_question_id": "q02_waterlogging",
+        },
+    )
+    assert chat_res.status_code == 200
+    pending = chat_res.json().get("pending_confirmation")
+    assert pending is not None
+
+    confirm_res = client.post(
+        "/api/voice/confirm",
+        json={
+            "farm_id": "guest_plot_1",
+            "session_id": "sess_guest_1",
+            "confirmation_id": pending["confirmation_id"],
+            "accepted": True,
+        },
+    )
+    assert confirm_res.status_code == 200
+    assert confirm_res.json()["saved"] is True
+
+    # WebSocket should NOT fail with 1008 when running locally without token
+    class DummyRealtime:
+        def __init__(self) -> None:
+            self.seen_store = None
+            self.seen_token = "unset"
+
+        async def handle_websocket(self, websocket, **kwargs):
+            self.seen_store = kwargs["memory_store"]
+            self.seen_token = kwargs["access_token"]
+            await websocket.accept()
+            await websocket.send_json({"type": "ready", "guest": True})
+            await websocket.close(code=1000)
+
+    dummy_rt = DummyRealtime()
+    monkeypatch.setattr(main_mod, "_has_real_openai", lambda: True)
+    monkeypatch.setattr(main_mod, "get_realtime_service", lambda: dummy_rt)
+
+    with client.websocket_connect("/ws/voice/guest_plot_1/sess_guest_ws?language=ms") as ws:
+        msg = ws.receive_json()
+        assert msg == {"type": "ready", "guest": True}
+    assert dummy_rt.seen_store is guest_store
+    assert dummy_rt.seen_token is None
+
+    # On Vercel, auth must remain strictly required
+    monkeypatch.setattr(main_mod, "_is_vercel", True)
+    assert client.get("/api/config").json()["allow_local_guest"] is False
+    assert client.get("/api/farms").status_code == 401
+    try:
+        with client.websocket_connect("/ws/voice/guest_plot_1/sess_guest_ws?language=ms"):
+            raise AssertionError("Expected WebSocketDisconnect without token on Vercel")
+    except WebSocketDisconnect as exc:
+        assert exc.code == 1008
+
+    html = Path("nasa/static/index.html").read_text(encoding="utf-8")
+    assert "allow_local_guest" in html
+    assert "enterApp" in html
+
+
+
 
 
 

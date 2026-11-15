@@ -84,10 +84,23 @@ _climate_cache_dir = Path("/tmp/petanipal_climate_cache") if _is_vercel else (BA
 _farm_memory_dir = Path("/tmp/petanipal_farm_memories") if _is_vercel else (BASE_DIR / "data" / "farm_memories")
 climate_service = NasaPowerClimateService(cache_dir=_climate_cache_dir)
 use_supabase = _has_real_supabase()
+local_memory_store = MemoryStore(storage_dir=_farm_memory_dir)
 memory_store: MemoryStore | SupabaseMemoryStore = (
-    SupabaseMemoryStore() if use_supabase else MemoryStore(storage_dir=_farm_memory_dir)
+    SupabaseMemoryStore() if use_supabase else local_memory_store
 )
 _voice_service: Optional[OpenAIVoiceService] = None
+
+
+def _allow_local_guest() -> bool:
+    return (not _is_vercel) and os.getenv("ALLOW_LOCAL_GUEST", "true").lower() == "true"
+
+
+def _store_for(access_token: Optional[str]) -> MemoryStore | SupabaseMemoryStore:
+    if isinstance(memory_store, SupabaseMemoryStore) and not access_token and _allow_local_guest():
+        return local_memory_store
+    return memory_store
+
+
 _realtime_service: Optional[OpenAIRealtimeService] = None
 
 
@@ -106,10 +119,12 @@ class CompareRequest(BaseModel):
 def get_auth_context(
     authorization: Annotated[Optional[str], Header()] = None,
 ) -> tuple[Optional[str], Optional[str]]:
-    """Verify Supabase Bearer JWT when Supabase is configured; returns (user_id, token)."""
+    """Verify Supabase Bearer JWT when Supabase is configured; allow guest fallback locally."""
     if not isinstance(memory_store, SupabaseMemoryStore):
         return (None, None)
     if not authorization or not authorization.lower().startswith("bearer "):
+        if _allow_local_guest():
+            return (None, None)
         raise HTTPException(status_code=401, detail="Missing Authorization: Bearer <token> header.")
     token = authorization.split(" ", 1)[1].strip()
     user_id = memory_store.verify_user(token)
@@ -148,6 +163,7 @@ def _geotanih_flags_for(farm: FarmMemory) -> set[str]:
 def _build_pending_confirmation(
     session_id: str,
     result: LLMExtractionResult,
+    access_token: Optional[str] = None,
 ) -> Optional[PendingConfirmation]:
     if not result.needs_confirmation or not result.extracted_target_field:
         return None
@@ -174,7 +190,7 @@ def _build_pending_confirmation(
         human_label=result.human_label or str(result.extracted_value or ""),
         confirmation_prompt=result.confirmation_prompt or result.assistant_text,
     )
-    memory_store.save_pending(session_id, pending)
+    _store_for(access_token).save_pending(session_id, pending)
     return pending
 
 
@@ -189,7 +205,8 @@ async def _process_utterance(
     user_id: Optional[str],
     access_token: Optional[str],
 ) -> VoiceTurnResponse:
-    farm = memory_store.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
+    store = _store_for(access_token)
+    farm = store.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
     farm.preferred_language = language
     gt_flags = _geotanih_flags_for(farm)
 
@@ -229,7 +246,7 @@ async def _process_utterance(
             comparison_context=comparison_context,
         )
 
-    pending = _build_pending_confirmation(session_id, llm_result)
+    pending = _build_pending_confirmation(session_id, llm_result, access_token=access_token)
     next_q = libraries.get_next_question(farm, geotanih_flags=gt_flags)
 
     tts_b64: Optional[str] = None
@@ -266,6 +283,7 @@ def get_public_config_sync() -> dict[str, Any]:
         "supabase_url": os.getenv("SUPABASE_URL", "") if _has_real_supabase() else "",
         "supabase_anon_key": os.getenv("SUPABASE_ANON_KEY", os.getenv("SUPABASE_KEY", "")) if _has_real_supabase() else "",
         "supabase_enabled": isinstance(memory_store, SupabaseMemoryStore),
+        "allow_local_guest": _allow_local_guest(),
         "openai_configured": _has_real_openai(),
         "realtime_model": os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime-2.1-mini"),
     }
@@ -282,6 +300,7 @@ async def health() -> dict[str, object]:
         "status": "ok",
         "locality": libraries.crop_library.locality,
         "storage": "supabase" if isinstance(memory_store, SupabaseMemoryStore) else "local_json",
+        "local_guest_enabled": _allow_local_guest(),
     }
 
 
@@ -307,7 +326,7 @@ def list_farms_sync(
     auth: tuple[Optional[str], Optional[str]] = (None, None),
 ) -> dict[str, Any]:
     user_id, access_token = auth
-    return {"farms": memory_store.list_farms(user_id=user_id, access_token=access_token)}
+    return {"farms": _store_for(access_token).list_farms(user_id=user_id, access_token=access_token)}
 
 
 @app.get("/api/farms")
@@ -323,7 +342,7 @@ async def get_farm(
     auth: Annotated[tuple[Optional[str], Optional[str]], Depends(get_auth_context)],
 ) -> FarmMemory:
     user_id, access_token = auth
-    return memory_store.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
+    return _store_for(access_token).get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
 
 
 @app.post("/api/farms/{farm_id}/sync", response_model=FarmMemory)
@@ -334,9 +353,10 @@ async def sync_farm_memory(
 ) -> FarmMemory:
     """Restore or merge a device-local FarmMemory snapshot into the active backend store."""
     user_id, access_token = auth
-    if hasattr(memory_store, "sync_farm_memory"):
-        return memory_store.sync_farm_memory(farm_id=farm_id, incoming=payload)
-    return memory_store.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
+    store = _store_for(access_token)
+    if hasattr(store, "sync_farm_memory"):
+        return store.sync_farm_memory(farm_id=farm_id, incoming=payload)
+    return store.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
 
 
 def update_farm_location_sync(
@@ -345,7 +365,7 @@ def update_farm_location_sync(
     auth: tuple[Optional[str], Optional[str]] = (None, None),
 ) -> FarmMemory:
     user_id, access_token = auth
-    return memory_store.update_location(
+    return _store_for(access_token).update_location(
         farm_id=farm_id,
         locality=payload.locality,
         latitude=payload.latitude,
@@ -374,7 +394,7 @@ def export_farm_memory_sync(
     allow_network: Optional[bool] = None,
 ) -> dict[str, Any]:
     user_id, access_token = auth
-    farm = memory_store.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
+    farm = _store_for(access_token).get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
     lat = farm.location.latitude or 5.647
     lon = farm.location.longitude or 100.487
     use_net = _allow_nasa_network() if allow_network is None else allow_network
@@ -403,7 +423,7 @@ async def get_farm_checkin(
 ) -> dict[str, object]:
     """Return one optional, context-aware check-in prompt based on saved FarmMemory."""
     user_id, access_token = auth
-    farm = memory_store.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
+    farm = _store_for(access_token).get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
     checkin = libraries.get_optional_checkin(farm, language=language)
     return {"farm_id": farm.farm_id, "checkin": checkin}
 
@@ -414,7 +434,8 @@ def compare_farm_rotations_sync(
     allow_network: Optional[bool] = None,
 ) -> dict[str, Any]:
     user_id, access_token = auth
-    farm = memory_store.get_or_create_farm(payload.farm_id, user_id=user_id, access_token=access_token)
+    store = _store_for(access_token)
+    farm = store.get_or_create_farm(payload.farm_id, user_id=user_id, access_token=access_token)
     lat = farm.location.latitude or 5.647
     lon = farm.location.longitude or 100.487
     use_net = _allow_nasa_network() if allow_network is None else allow_network
@@ -426,7 +447,7 @@ def compare_farm_rotations_sync(
         candidate_crop_names=payload.candidate_crops,
         scenario=payload.scenario,
     )
-    memory_store.save_rotation_comparison(
+    store.save_rotation_comparison(
         farm_id=payload.farm_id,
         result=result,
         user_id=user_id,
@@ -449,7 +470,7 @@ async def delete_farm(
     auth: Annotated[tuple[Optional[str], Optional[str]], Depends(get_auth_context)],
 ) -> dict[str, bool]:
     user_id, access_token = auth
-    return {"deleted": memory_store.delete_farm(farm_id, user_id=user_id, access_token=access_token)}
+    return {"deleted": _store_for(access_token).delete_farm(farm_id, user_id=user_id, access_token=access_token)}
 
 
 @app.post("/api/voice/turn", response_model=VoiceTurnResponse)
@@ -524,12 +545,13 @@ async def confirm_fact(
 ) -> dict[str, object]:
     """Save a farmer-confirmed fact to FarmMemory and return the next interview question."""
     user_id, access_token = auth
-    pending = memory_store.pop_pending(payload.session_id, payload.confirmation_id)
+    store = _store_for(access_token)
+    pending = store.pop_pending(payload.session_id, payload.confirmation_id)
     if pending is None:
         raise HTTPException(status_code=404, detail="Pending confirmation not found or already handled.")
 
     farm = (
-        memory_store.apply_confirmed_fact(
+        store.apply_confirmed_fact(
             farm_id=payload.farm_id,
             target_field=pending.target_field,
             value=pending.proposed_value,
@@ -537,7 +559,7 @@ async def confirm_fact(
             access_token=access_token,
         )
         if payload.accepted
-        else memory_store.get_or_create_farm(payload.farm_id, user_id=user_id, access_token=access_token)
+        else store.get_or_create_farm(payload.farm_id, user_id=user_id, access_token=access_token)
     )
 
     next_q = libraries.get_next_question(farm, geotanih_flags=_geotanih_flags_for(farm))
@@ -558,21 +580,22 @@ async def voice_realtime_ws(
     noise_mode: str = "strict",
 ) -> None:
     """Live bidirectional audio/text WebSocket backed by gpt-realtime-2.1-mini."""
-    if not os.getenv("OPENAI_API_KEY"):
+    if not _has_real_openai():
         await websocket.close(code=1011, reason="OPENAI_API_KEY is not configured.")
         return
 
     user_id: Optional[str] = None
     access_token: Optional[str] = None
     if isinstance(memory_store, SupabaseMemoryStore):
-        if not token:
+        if token:
+            try:
+                user_id = memory_store.verify_user(token)
+                access_token = token
+            except HTTPException:
+                await websocket.close(code=1008, reason="Invalid or expired Supabase token.")
+                return
+        elif not _allow_local_guest():
             await websocket.close(code=1008, reason="Missing Supabase token query parameter.")
-            return
-        try:
-            user_id = memory_store.verify_user(token)
-            access_token = token
-        except HTTPException:
-            await websocket.close(code=1008, reason="Invalid or expired Supabase token.")
             return
 
     realtime = get_realtime_service()
@@ -582,7 +605,7 @@ async def voice_realtime_ws(
         session_id=session_id,
         language=language,
         libraries=libraries,
-        memory_store=memory_store,
+        memory_store=_store_for(access_token),
         user_id=user_id,
         access_token=access_token,
         noise_mode=noise_mode,

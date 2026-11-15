@@ -923,6 +923,7 @@
       accessToken: null,
       supabaseClient: null,
       supabaseEnabled: false,
+      allowLocalGuest: false,
       scenario: 'normal',
       comparison: null,
       selectedOptionIdx: 0,
@@ -1058,6 +1059,17 @@
     }
 
     let initReadyPromise = null;
+    let hasEnteredApp = false;
+
+    async function enterApp() {
+      if (hasEnteredApp) return;
+      hasEnteredApp = true;
+      document.getElementById('screen-entrance').classList.add('hidden');
+      document.getElementById('screen-app').classList.remove('hidden');
+      await syncAllDeviceFarmsOnStartup();
+      await loadFarmsList();
+      await selectFarm(state.farmId, false);
+    }
 
     async function initApp() {
       try {
@@ -1068,7 +1080,8 @@
         const res = await fetch('/api/config');
         const cfg = await res.json();
         state.supabaseEnabled = Boolean(cfg.supabase_enabled);
-        if (cfg.supabase_enabled && cfg.supabase_url && cfg.supabase_anon_key && window.supabase) {
+        state.allowLocalGuest = Boolean(cfg.allow_local_guest);
+        if (!state.allowLocalGuest && cfg.supabase_enabled && cfg.supabase_url && cfg.supabase_anon_key && window.supabase) {
           state.supabaseClient = window.supabase.createClient(cfg.supabase_url, cfg.supabase_anon_key);
           const { data: sessionData } = await state.supabaseClient.auth.getSession();
           state.accessToken = sessionData?.session?.access_token || null;
@@ -1079,7 +1092,7 @@
       } catch (e) {
         console.warn('Config fallback:', e);
       }
-      if (!state.supabaseEnabled || state.accessToken) {
+      if (!state.supabaseEnabled || state.accessToken || state.allowLocalGuest) {
         syncAllDeviceFarmsOnStartup().catch(() => {});
       }
       setupEarthHoldInteraction();
@@ -1114,6 +1127,9 @@
       if (initReadyPromise) {
         await initReadyPromise;
       }
+      if (hasEnteredApp) {
+        return;
+      }
       const btnSignIn = document.getElementById('btnSignIn');
       const email = document.getElementById('operatorId')?.value?.trim() || '';
       const password = document.getElementById('operatorKey')?.value?.trim() || '';
@@ -1128,7 +1144,7 @@
         `;
       }
 
-      if (state.supabaseEnabled) {
+      if (state.supabaseEnabled && !state.allowLocalGuest) {
         if (!state.supabaseClient) {
           showLoginError('Authentication service is unavailable. Please reload and try again.');
           resetSignInButton(btnSignIn);
@@ -1171,11 +1187,7 @@
           `;
         }
         setTimeout(async () => {
-          document.getElementById('screen-entrance').classList.add('hidden');
-          document.getElementById('screen-app').classList.remove('hidden');
-          await syncAllDeviceFarmsOnStartup();
-          await loadFarmsList();
-          await selectFarm(state.farmId, false);
+          await enterApp();
         }, 450);
       }, 450);
     }
