@@ -1571,11 +1571,11 @@
       compressor.connect(filteredDest);
 
       // 5. Adaptive noise-floor + SNR near-field gate state
-      let noiseFloorRms = 0.008;
+      let noiseFloorRms = 0.002;
       let gateOpen = false;
       let hangoverUntil = 0;
       const preRoll = [];
-      const MAX_PREROLL_FRAMES = 2; // ~170ms at 2048 samples / 24kHz
+      const MAX_PREROLL_FRAMES = 3;
       const silentGain = audioCtx.createGain();
       silentGain.gain.value = 0;
       silentGain.connect(audioCtx.destination);
@@ -1593,29 +1593,29 @@
           const rms = Math.sqrt(sum / inputData.length);
           const isStrict = state.voiceFilterMode === 'strict';
           const palSpeakingBoost = liveActiveSources.length > 0 ? 1.45 : 1.0;
-          const snrMult = (isStrict ? 2.8 : 2.0) * palSpeakingBoost;
-          const absFloor = (isStrict ? 0.014 : 0.008) * palSpeakingBoost;
+          const snrMult = (isStrict ? 1.8 : 1.5) * palSpeakingBoost;
+          const absFloor = (isStrict ? 0.004 : 0.0025) * palSpeakingBoost;
           const openThresh = Math.max(absFloor, noiseFloorRms * snrMult);
-          const closeThresh = openThresh * 0.72;
+          const closeThresh = openThresh * 0.65;
           const now = performance.now();
 
           if (rms >= openThresh) {
             gateOpen = true;
-            hangoverUntil = now + 280;
+            hangoverUntil = now + 350;
           } else if (gateOpen && rms >= closeThresh) {
-            hangoverUntil = now + 220;
+            hangoverUntil = now + 260;
           } else if (gateOpen && now > hangoverUntil) {
             gateOpen = false;
           }
 
           if (!gateOpen) {
             // Track rolling ambient background floor smoothly
-            noiseFloorRms = Math.min(0.06, Math.max(0.003, noiseFloorRms * 0.96 + rms * 0.04));
+            noiseFloorRms = Math.min(0.03, Math.max(0.001, noiseFloorRms * 0.96 + rms * 0.04));
             preRoll.push(new Float32Array(inputData));
             if (preRoll.length > MAX_PREROLL_FRAMES) preRoll.shift();
             return {
               passed: false,
-              ambientDetected: rms > 0.006,
+              ambientDetected: rms > 0.002,
               frames: [new Float32Array(inputData.length)], // digital silence
             };
           }
@@ -1702,6 +1702,37 @@
       };
     }
 
+    function ensureLiveAudioContext() {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
+      if (!liveAudioCtx || liveAudioCtx.state === 'closed') {
+        try {
+          liveAudioCtx = new AudioContextClass({ sampleRate: 24000 });
+        } catch (e) {
+          liveAudioCtx = new AudioContextClass();
+        }
+      }
+      if (liveAudioCtx.state === 'suspended') {
+        liveAudioCtx.resume().catch(() => {});
+      }
+      return liveAudioCtx;
+    }
+
+    function resampleFloat32(samples, inputRate, targetRate = 24000) {
+      if (!inputRate || inputRate === targetRate) return samples;
+      const ratio = inputRate / targetRate;
+      const outLength = Math.max(1, Math.round(samples.length / ratio));
+      const out = new Float32Array(outLength);
+      for (let i = 0; i < outLength; i++) {
+        const srcIdx = i * ratio;
+        const idx0 = Math.floor(srcIdx);
+        const idx1 = Math.min(samples.length - 1, idx0 + 1);
+        const frac = srcIdx - idx0;
+        out[i] = samples[idx0] * (1 - frac) + samples[idx1] * frac;
+      }
+      return out;
+    }
+
     function float32ToPcm16Base64(float32Array) {
       const pcm16 = new Int16Array(float32Array.length);
       for (let i = 0; i < float32Array.length; i++) {
@@ -1753,12 +1784,14 @@
       // Automatic VAD turn-by-turn fallback if Realtime WebSocket is unavailable
       if (!state.isListening || !stream || liveFallbackRunning) return;
       liveFallbackRunning = true;
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (!liveAudioCtx) liveAudioCtx = new AudioContextClass();
+      ensureLiveAudioContext();
+      if (liveAudioCtx && liveAudioCtx.state === 'suspended') {
+        try { await liveAudioCtx.resume(); } catch (e) {}
+      }
       if (!liveFilterGraph) {
         liveFilterGraph = createFilteredMicPipeline(stream, liveAudioCtx);
       }
-      const targetStream = liveFilterGraph.filteredStream || stream;
+      const targetStream = stream;
       const analyser = liveAudioCtx.createAnalyser();
       analyser.fftSize = 512;
       liveFilterGraph.compressor.connect(analyser);
@@ -1774,7 +1807,12 @@
       const startSegmentRecorder = () => {
         if (!state.isListening || busyTurn) return;
         chunks = [];
-        recorder = new MediaRecorder(targetStream);
+        try {
+          recorder = new MediaRecorder(targetStream);
+        } catch (err) {
+          console.warn('MediaRecorder init failed:', err);
+          return;
+        }
         recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
         recorder.onstop = async () => {
           if (!state.isListening) return;
@@ -1865,6 +1903,7 @@
       state.isListening = true;
       liveElapsedSec = 0;
       liveSubMode = 'listening';
+      ensureLiveAudioContext();
       if (state.farmCardOpen) toggleFarmSelectionCard();
 
       setEarthVisualActive(true);
@@ -1943,10 +1982,12 @@
       const ws = new WebSocket(wsUrl);
       state.realtimeWs = ws;
 
-      ws.onopen = () => {
+      ws.onopen = async () => {
         try {
-          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-          liveAudioCtx = new AudioContextClass({ sampleRate: 24000 });
+          ensureLiveAudioContext();
+          if (liveAudioCtx && liveAudioCtx.state === 'suspended') {
+            await liveAudioCtx.resume();
+          }
           liveNextPlayTime = liveAudioCtx.currentTime;
           liveFilterGraph = createFilteredMicPipeline(liveMicStream, liveAudioCtx);
           liveSource = liveFilterGraph.source;
@@ -1963,7 +2004,8 @@
               setListeningIndicator('ambient_filtered');
             }
             for (const frame of gated.frames) {
-              const b64 = float32ToPcm16Base64(frame);
+              const resampled = resampleFloat32(frame, liveAudioCtx.sampleRate, 24000);
+              const b64 = float32ToPcm16Base64(resampled);
               state.realtimeWs.send(JSON.stringify({ type: 'audio_chunk', audio: b64 }));
             }
           };
@@ -2058,6 +2100,13 @@
               document.getElementById('pal-says-text').textContent = pendingObj.confirmation_prompt;
             }
             document.getElementById('pending-confirm-box').classList.remove('hidden');
+          } else if (msg.type === 'error') {
+            if (msg.message) {
+              document.getElementById('reassurance-status-text').textContent = msg.message;
+            }
+            if (state.isListening && liveMicStream) {
+              startFallbackContinuousTurnLoop(liveMicStream);
+            }
           } else if (msg.assistant_text) {
             document.getElementById('pal-says-text').textContent = msg.assistant_text;
           }
@@ -2081,6 +2130,8 @@
     function stopLiveConversation() {
       state.isListening = false;
       liveFallbackRunning = false;
+      liveSubMode = 'listening';
+      liveEchoTailUntil = 0;
       clearInterval(liveTimerInterval);
       stopPalAudioPlayback();
 
