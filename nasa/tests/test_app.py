@@ -737,9 +737,12 @@ def test_earth_hold_to_listen_interrupt_and_inline_status():
     assert "beginEarthHold" in html
     assert "endEarthHold" in html
     assert "isHoldingEarth" in html
+    assert "isLiveHandsFree" in html
+    assert "toggleRealtimeHandsFree" in html
     assert "response.cancel" in html
     assert "Hearing you speak..." in html
     assert "Hold to interrupt" in html
+    assert "Tap or Hold to speak" in html
     assert 'id="reassurance-status-text" class="hidden' in html
     assert 'id="listeningStatusPill" class="hidden' in html
 

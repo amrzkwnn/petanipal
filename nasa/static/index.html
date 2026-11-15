@@ -686,7 +686,7 @@
                   <div class="wave-bar"></div>
                   <div class="wave-bar"></div>
                 </div>
-                <span class="font-label-sm text-[12px] font-bold tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] transition-all text-center leading-tight" id="voiceBtnLabel">Hold to speak</span>
+                <span class="font-label-sm text-[12px] font-bold tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] transition-all text-center leading-tight" id="voiceBtnLabel">Tap or Hold to speak</span>
               </div>
             </div>
           </div>
@@ -933,6 +933,7 @@
       audioChunks: [],
       realtimeWs: null,
       isListening: false,
+      isLiveHandsFree: false,
       isHoldingEarth: false,
       farmCardOpen: false,
       voiceFilterMode: 'strict',
@@ -1344,10 +1345,12 @@
 
     function toggleLanguage() {
       const wasListening = state.isListening;
+      const wasLiveHandsFree = state.isLiveHandsFree;
       state.language = state.language === 'en' ? 'ms' : 'en';
       document.getElementById('langCodeLabel').textContent = state.language.toUpperCase();
       if (wasListening) {
         stopLiveConversation();
+        state.isLiveHandsFree = wasLiveHandsFree;
         startLiveConversation();
       } else {
         setEarthVisualActive(false);
@@ -1424,21 +1427,14 @@
         audio.onended = () => {
           if (liveTtsAudioEl === audio) liveTtsAudioEl = null;
           liveEchoTailUntil = Date.now() + 280;
-          if (!state.isHoldingEarth) {
-            liveSubMode = 'listening';
-            setListeningIndicator('idle');
-          }
+          restorePostTurnIndicator();
         };
         audio.play().catch(() => {
           if (liveTtsAudioEl === audio) liveTtsAudioEl = null;
-          if (!state.isHoldingEarth) {
-            liveSubMode = 'listening';
-            setListeningIndicator('idle');
-          }
+          restorePostTurnIndicator();
         });
-      } else if (!state.isHoldingEarth) {
-        liveSubMode = 'listening';
-        setListeningIndicator('idle');
+      } else {
+        restorePostTurnIndicator();
       }
       if (turn.assistant_text) {
         syncSuggestedCropFromAssistantText(turn.assistant_text);
@@ -1490,6 +1486,19 @@
       window.speechSynthesis.speak(u);
     }
 
+    function restorePostTurnIndicator() {
+      if (state.isHoldingEarth) {
+        liveSubMode = 'speaking_user';
+        setListeningIndicator('speaking_user');
+      } else if (state.isLiveHandsFree) {
+        liveSubMode = 'listening';
+        setListeningIndicator('listening');
+      } else {
+        liveSubMode = 'listening';
+        setListeningIndicator('idle');
+      }
+    }
+
     function setListeningIndicator(mode, detailText = '') {
       const earthBtn = document.getElementById('earthVoiceBtn');
       const spinLand = document.getElementById('spinLand');
@@ -1499,9 +1508,17 @@
       const voiceWaveIndicator = document.getElementById('voiceWaveIndicator');
       const txt = document.getElementById('listeningStatusText');
 
-      const effectiveMode = state.isHoldingEarth ? 'speaking_user' : mode;
+      let effectiveMode = mode;
+      if (state.isHoldingEarth) {
+        effectiveMode = 'speaking_user';
+      } else if ((mode === 'idle' || !mode) && state.isLiveHandsFree) {
+        effectiveMode = 'listening';
+      }
+
       const isActiveVisual =
         effectiveMode === 'speaking_user' ||
+        effectiveMode === 'listening' ||
+        effectiveMode === 'ambient_filtered' ||
         effectiveMode === 'processing' ||
         effectiveMode === 'speaking_pal';
 
@@ -1520,9 +1537,11 @@
       } else if (effectiveMode === 'processing') {
         labelText = detailText || (state.language === 'ms' ? 'Pal sedang berfikir...' : 'Pal is thinking...');
       } else if (effectiveMode === 'speaking_pal') {
-        labelText = detailText || (state.language === 'ms' ? 'Tahan untuk mencelah' : 'Hold to interrupt');
+        labelText = detailText || (state.language === 'ms' ? 'Ketik / Tahan untuk celah' : 'Hold to interrupt');
+      } else if (effectiveMode === 'listening' || effectiveMode === 'ambient_filtered') {
+        labelText = detailText || (state.language === 'ms' ? 'Langsung • Ketik tamat' : 'Live • Tap to end');
       } else {
-        labelText = detailText || (state.language === 'ms' ? 'Tahan untuk bercakap' : 'Hold to speak');
+        labelText = detailText || (state.language === 'ms' ? 'Ketik atau Tahan' : 'Tap or Hold to speak');
       }
 
       if (voiceBtnLabel) {
@@ -1543,6 +1562,9 @@
     let liveActiveSources = [];
     let liveTtsAudioEl = null;
     let activeDirectRespBuf = null;
+    let isPointerDownOnEarth = false;
+    let holdDetectionTimer = null;
+    let wasPalSpeakingOnPress = false;
     let holdPressStartMs = 0;
     let holdFramesSent = 0;
     let holdSilenceFrames = 0;
@@ -1758,13 +1780,7 @@
           }
         } catch (e) {}
       }
-      if (state.isHoldingEarth) {
-        liveSubMode = 'speaking_user';
-        setListeningIndicator('speaking_user');
-      } else {
-        liveSubMode = 'listening';
-        setListeningIndicator('idle');
-      }
+      restorePostTurnIndicator();
     }
 
     function playPcm16Base64Delta(base64Delta) {
@@ -1806,10 +1822,7 @@
         liveActiveSources = liveActiveSources.filter(s => s !== src);
         if (liveActiveSources.length === 0) {
           liveEchoTailUntil = Date.now() + 280;
-          if (!state.isHoldingEarth) {
-            liveSubMode = 'listening';
-            setListeningIndicator('idle');
-          }
+          restorePostTurnIndicator();
         }
       };
     }
@@ -1863,7 +1876,7 @@
     function setEarthVisualActive(active) {
       const wsBtn = document.getElementById('btn-realtime-ws');
       if (active) {
-        setListeningIndicator(state.isHoldingEarth ? 'speaking_user' : liveSubMode);
+        setListeningIndicator(state.isHoldingEarth ? 'speaking_user' : (state.isLiveHandsFree ? 'listening' : liveSubMode));
         if (wsBtn) wsBtn.textContent = 'End Live WS';
       } else {
         setListeningIndicator('idle');
@@ -1889,7 +1902,7 @@
     }
 
     async function startFallbackContinuousTurnLoop(stream) {
-      // Automatic VAD / Hold-to-speak turn-by-turn fallback if Realtime WebSocket is unavailable
+      // Automatic VAD (Live mode) + Hold-to-speak turn-by-turn fallback if Realtime WebSocket is unavailable
       if (!state.isListening || !stream || liveFallbackRunning) return;
       liveFallbackRunning = true;
       ensureLiveAudioContext();
@@ -1941,10 +1954,7 @@
           const blob = new Blob(chunks, { type: actualMime });
           if (blob.size < 400) {
             busyTurn = false;
-            if (!state.isHoldingEarth) {
-              liveSubMode = 'listening';
-              setListeningIndicator('idle');
-            }
+            restorePostTurnIndicator();
             return;
           }
           busyTurn = true;
@@ -1967,17 +1977,15 @@
               const turn = await res.json();
               renderVoiceTurn(turn);
               busyTurn = false;
-              if (state.isListening && !turn.tts_audio_base64 && !state.isHoldingEarth) {
-                liveSubMode = 'listening';
-                setListeningIndicator('idle');
+              if (state.isListening && !turn.tts_audio_base64) {
+                restorePostTurnIndicator();
               }
               return;
             }
           } catch (err) {}
           busyTurn = false;
-          if (state.isListening && !state.isHoldingEarth) {
-            liveSubMode = 'listening';
-            setListeningIndicator('idle');
+          if (state.isListening) {
+            restorePostTurnIndicator();
           }
         };
         recorder.start();
@@ -2007,17 +2015,37 @@
 
       liveProcessor.onaudioprocess = ev => {
         if (!state.isListening || !liveFallbackRunning) return;
-        if (!state.isHoldingEarth) return;
         const inputData = ev.inputBuffer.getChannelData(0);
-        liveFilterGraph.processFrame(inputData);
-        holdFramesSent += 1;
-        if (!speaking && !busyTurn) {
-          speaking = true;
-          liveSubMode = 'speaking_user';
-          setListeningIndicator('speaking_user');
-          startSegmentRecorder();
+        if (state.isHoldingEarth) {
+          liveFilterGraph.processFrame(inputData);
+          holdFramesSent += 1;
+          if (!speaking && !busyTurn) {
+            speaking = true;
+            liveSubMode = 'speaking_user';
+            setListeningIndicator('speaking_user');
+            startSegmentRecorder();
+          }
+          silenceStart = Date.now();
+          return;
         }
-        silenceStart = Date.now();
+        if (!state.isLiveHandsFree) return;
+        const palBusyOrEcho = liveSubMode === 'speaking_pal' || liveActiveSources.length > 0 || Date.now() < liveEchoTailUntil;
+        if (busyTurn || palBusyOrEcho) return;
+        const gated = liveFilterGraph.processFrame(inputData);
+        if (gated.passed || gated.rms >= 0.0025) {
+          if (!speaking) {
+            speaking = true;
+            liveSubMode = 'speaking_user';
+            setListeningIndicator('speaking_user');
+            startSegmentRecorder();
+          }
+          silenceStart = Date.now();
+        } else if (speaking && Date.now() - silenceStart > 1000) {
+          speaking = false;
+          if (recorder && recorder.state !== 'inactive') {
+            try { recorder.stop(); } catch (e) {}
+          }
+        }
       };
     }
 
@@ -2085,8 +2113,7 @@
         }
         refreshDeviceFarmCache(state.farmId);
         if (!state.isHoldingEarth && liveActiveSources.length === 0) {
-          liveSubMode = 'listening';
-          setListeningIndicator('idle');
+          restorePostTurnIndicator();
         }
       } else if (msg.type === 'pending_confirmation' && (msg.pending_confirmation || msg.data)) {
         const pendingObj = msg.pending_confirmation || msg.data;
@@ -2150,12 +2177,14 @@
         const wsOpen = activeWs && activeWs.readyState === WebSocket.OPEN;
         const directMode = Boolean(state.directOpenAiWs);
 
-        if (state.isHoldingEarth) {
+        if (state.isHoldingEarth || isPointerDownOnEarth) {
           if (liveFilterGraph) liveFilterGraph.processFrame(inputData);
-          holdFramesSent += 1;
-          if (liveSubMode !== 'speaking_user') {
-            liveSubMode = 'speaking_user';
-            setListeningIndicator('speaking_user');
+          if (state.isHoldingEarth) {
+            holdFramesSent += 1;
+            if (liveSubMode !== 'speaking_user') {
+              liveSubMode = 'speaking_user';
+              setListeningIndicator('speaking_user');
+            }
           }
           const resampled = resampleFloat32(inputData, liveAudioCtx.sampleRate, 24000);
           const b64 = float32ToPcm16Base64(resampled);
@@ -2180,6 +2209,18 @@
             pendingHoldPcmFrames.push(b64);
           }
           return;
+        }
+
+        if (state.isLiveHandsFree && wsOpen && liveFilterGraph) {
+          if (liveSubMode === 'speaking_pal' || liveActiveSources.length > 0 || Date.now() < liveEchoTailUntil) {
+            return;
+          }
+          const gated = liveFilterGraph.processFrame(inputData);
+          for (const frame of gated.frames) {
+            const resampled = resampleFloat32(frame, liveAudioCtx.sampleRate, 24000);
+            const b64 = float32ToPcm16Base64(resampled);
+            sendPcm16FrameToWs(activeWs, directMode, b64);
+          }
         }
       };
     }
@@ -2358,7 +2399,7 @@
       ensureLiveAudioContext();
       if (state.farmCardOpen) toggleFarmSelectionCard();
 
-      setListeningIndicator(state.isHoldingEarth ? 'speaking_user' : 'idle');
+      restorePostTurnIndicator();
 
       clearInterval(liveTimerInterval);
       liveTimerInterval = setInterval(() => {
@@ -2385,6 +2426,7 @@
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         state.isHoldingEarth = false;
+        state.isLiveHandsFree = false;
         setListeningIndicator('idle');
         stopLiveConversation();
         return;
@@ -2403,6 +2445,7 @@
       } catch (err) {
         console.warn('Mic permission error:', err);
         state.isHoldingEarth = false;
+        state.isLiveHandsFree = false;
         setListeningIndicator('idle');
         stopLiveConversation();
         return;
@@ -2471,7 +2514,9 @@
 
     function stopLiveConversation() {
       state.isListening = false;
+      state.isLiveHandsFree = false;
       state.isHoldingEarth = false;
+      isPointerDownOnEarth = false;
       state.directOpenAiWs = false;
       activeDirectRespBuf = null;
       startFallbackHoldRecording = null;
@@ -2480,6 +2525,7 @@
       liveSubMode = 'listening';
       liveEchoTailUntil = 0;
       clearInterval(liveTimerInterval);
+      clearTimeout(holdDetectionTimer);
       clearTimeout(holdProcessingTimeout);
       stopPalAudioPlayback();
 
@@ -2515,58 +2561,89 @@
     }
 
     function toggleRealtimeHandsFree() {
-      if (state.isListening) {
+      if (state.isLiveHandsFree) {
+        state.isLiveHandsFree = false;
         stopLiveConversation();
       } else {
-        startLiveConversation();
+        state.isLiveHandsFree = true;
+        liveSubMode = 'listening';
+        setListeningIndicator('listening');
+        if (!state.isListening) {
+          startLiveConversation();
+        }
       }
     }
 
     function beginEarthHold(e) {
       if (e) e.preventDefault();
-      if (state.isHoldingEarth) return;
-      interruptPalSpeech();
-      state.isHoldingEarth = true;
+      if (isPointerDownOnEarth) return;
+      isPointerDownOnEarth = true;
       holdPressStartMs = Date.now();
       holdFramesSent = 0;
       holdSilenceFrames = 0;
       pendingHoldPcmFrames = [];
+      clearTimeout(holdDetectionTimer);
       clearTimeout(holdProcessingTimeout);
-      liveSubMode = 'speaking_user';
-      setListeningIndicator('speaking_user');
+
+      wasPalSpeakingOnPress = (
+        liveSubMode === 'speaking_pal' ||
+        liveActiveSources.length > 0 ||
+        Boolean(liveTtsAudioEl)
+      );
+      if (wasPalSpeakingOnPress) {
+        interruptPalSpeech();
+      }
 
       if (!state.isListening) {
         startLiveConversation();
-      } else if (liveFallbackRunning && typeof startFallbackHoldRecording === 'function') {
-        startFallbackHoldRecording();
       }
+
+      holdDetectionTimer = setTimeout(() => {
+        if (!isPointerDownOnEarth) return;
+        interruptPalSpeech();
+        state.isHoldingEarth = true;
+        liveSubMode = 'speaking_user';
+        setListeningIndicator('speaking_user');
+        if (liveFallbackRunning && typeof startFallbackHoldRecording === 'function') {
+          startFallbackHoldRecording();
+        }
+      }, 220);
     }
 
     function endEarthHold(e) {
       if (e) e.preventDefault();
-      if (!state.isHoldingEarth) return;
-      state.isHoldingEarth = false;
+      if (!isPointerDownOnEarth && !state.isHoldingEarth) return;
+      isPointerDownOnEarth = false;
+      clearTimeout(holdDetectionTimer);
       const heldMs = Date.now() - holdPressStartMs;
+      const wasHoldGesture = state.isHoldingEarth || heldMs >= 220;
+      state.isHoldingEarth = false;
+
       if (typeof stopFallbackHoldRecording === 'function') {
         stopFallbackHoldRecording();
       }
 
-      if (heldMs >= 220 || holdFramesSent > 2) {
+      if (wasHoldGesture) {
         holdSilenceFrames = 14;
         liveSubMode = 'processing';
         setListeningIndicator('processing');
         clearTimeout(holdProcessingTimeout);
         holdProcessingTimeout = setTimeout(() => {
           if (!state.isHoldingEarth && liveSubMode === 'processing' && liveActiveSources.length === 0) {
-            liveSubMode = 'listening';
-            setListeningIndicator('idle');
+            restorePostTurnIndicator();
           }
         }, 8000);
-      } else {
-        holdSilenceFrames = 0;
-        liveSubMode = 'listening';
-        setListeningIndicator('idle');
+        return;
       }
+
+      // Short Tap (< 220ms)
+      holdSilenceFrames = 0;
+      pendingHoldPcmFrames = [];
+      if (wasPalSpeakingOnPress) {
+        restorePostTurnIndicator();
+        return;
+      }
+      toggleRealtimeHandsFree();
     }
 
     function setupEarthHoldInteraction() {
