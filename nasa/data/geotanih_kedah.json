@@ -1,0 +1,56 @@
+{
+  "disclaimer": "District-level Soil Suitability Classification (1S to 5) derived from Department of Agriculture Malaysia GeoTanih reference maps. Always confirm with field observation (soil texture and drainage).",
+  "zones": [
+    {
+      "id": "kedah_kuala_muda_sp",
+      "state": "Kedah",
+      "district": "Kuala Muda (Sungai Petani)",
+      "bbox": { "lat_min": 5.50, "lat_max": 5.78, "lon_min": 100.38, "lon_max": 100.62 },
+      "soil_class": "2d",
+      "dominant_texture": "loam",
+      "drainage_tendency": "sometimes_stays_wet",
+      "limitation_codes": ["d"],
+      "limitation_summary_en": "Class 2d: Good agricultural land with minor drainage limitation in low-lying pockets.",
+      "limitation_summary_ms": "Kelas 2d: Tanah pertanian baik dengan had saliran kecil di kawasan rendah.",
+      "flags": ["geotanih_drainage_limitation"]
+    },
+    {
+      "id": "kedah_kota_setar_mada",
+      "state": "Kedah",
+      "district": "Kota Setar / MADA Alluvial Plain",
+      "bbox": { "lat_min": 5.95, "lat_max": 6.28, "lon_min": 100.25, "lon_max": 100.50 },
+      "soil_class": "2d",
+      "dominant_texture": "clay",
+      "drainage_tendency": "often_waterlogged",
+      "limitation_codes": ["d"],
+      "limitation_summary_en": "Class 2d: Heavy marine/alluvial clay suited to paddy; requires raised beds and drainage ditches for upland vegetables.",
+      "limitation_summary_ms": "Kelas 2d: Tanah liat aluvium sesuai untuk padi; memerlukan batas tinggi dan parit saliran untuk sayur tanah darat.",
+      "flags": ["geotanih_drainage_limitation"]
+    },
+    {
+      "id": "kedah_baling_sik_inland",
+      "state": "Kedah",
+      "district": "Baling / Sik Inland",
+      "bbox": { "lat_min": 5.55, "lat_max": 6.05, "lon_min": 100.63, "lon_max": 101.05 },
+      "soil_class": "3t",
+      "dominant_texture": "sandy",
+      "drainage_tendency": "drains_fast",
+      "limitation_codes": ["t", "g"],
+      "limitation_summary_en": "Class 3t: Undulating inland terrain; drains fast and needs organic mulch to retain moisture.",
+      "limitation_summary_ms": "Kelas 3t: Tanah pedalaman beralun; cepat kering dan memerlukan sungkupan organik untuk mengekalkan kelembapan.",
+      "flags": ["geotanih_slope_limitation"]
+    }
+  ],
+  "default_zone": {
+    "id": "malaysia_general_mineral",
+    "state": "Malaysia",
+    "district": "General Mineral Soil Zone",
+    "soil_class": "2d",
+    "dominant_texture": "loam",
+    "drainage_tendency": "sometimes_stays_wet",
+    "limitation_codes": ["d"],
+    "limitation_summary_en": "Estimated mineral soil profile (map-based). Confirm soil texture and drainage on your plot.",
+    "limitation_summary_ms": "Anggaran profil tanah mineral (berasaskan peta). Sahkan tekstur tanah dan saliran di kebun anda.",
+    "flags": ["geotanih_drainage_limitation"]
+  }
+}

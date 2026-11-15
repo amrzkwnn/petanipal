@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Farm Memory | Crop-Rotation Decision Support</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <style>
+    :root {
+      --bg: #f6f8f7;
+      --surface: #ffffff;
+      --ink: #14221b;
+      --muted: #4b5d53;
+      --accent: #0f766e;
+      --accent-dark: #115e59;
+      --border: #d5e0da;
+      --danger: #b91c1c;
+      --danger-bg: #fef2f2;
+      --ok: #15803d;
+      --warn: #b45309;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    .visually-hidden:where(:not(:focus-within, :active)) {
+      position: absolute !important;
+      clip-path: inset(50%) !important;
+      overflow: hidden !important;
+      width: 1px !important;
+      height: 1px !important;
+      margin: -1px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      white-space: nowrap !important;
+    }
+
+    .skip-link:focus {
+      position: fixed;
+      top: 0.75rem;
+      left: 0.75rem;
+      z-index: 2000;
+      background: var(--accent);
+      color: #fff;
+      padding: 0.5rem 0.9rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    :where(a:any-link, button, input, select):focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 1.25rem;
+    }
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    h1 { margin: 0; font-size: 1.45rem; }
+    .subtitle { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.92rem; }
+
+    nav { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    button {
+      min-block-size: 40px;
+      min-inline-size: 40px;
+      padding: 0.5rem 0.9rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink);
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    button.primary:hover { background: var(--accent-dark); }
+    button.choice-btn[aria-pressed="true"] {
+      background: #ccfbf1;
+      border-color: var(--accent);
+      color: #134e4a;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 1.25rem auto;
+      padding: 0 1.25rem 2rem;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+    }
+    @media (min-width: 960px) {
+      .top-grid {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 1.25rem;
+      }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.1rem;
+    }
+    .card h2 { margin-top: 0; font-size: 1.15rem; }
+    .card h3 { font-size: 1rem; margin: 0.85rem 0 0.4rem; }
+
+    #map {
+      width: 100%;
+      height: 310px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 0.75rem;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .field label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.2rem; }
+    .hint { display: block; color: var(--muted); font-size: 0.8rem; margin-bottom: 0.25rem; }
+    .field input, .field select {
+      width: 100%;
+      min-block-size: 40px;
+      padding: 0.45rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font: inherit;
+      background: #fff;
+    }
+    .error-msg {
+      display: none;
+      color: var(--danger);
+      font-size: 0.85rem;
+      margin-top: 0.25rem;
+    }
+    :is(input, select):is(:user-invalid, .user-invalid-fallback) {
+      border-color: var(--danger);
+      background-color: var(--danger-bg);
+    }
+    :is(input, select):is(:user-invalid, .user-invalid-fallback) + .error-msg {
+      display: block;
+    }
+    :is(input, select):user-valid { border-color: var(--ok); }
+
+    .question-block {
+      border-top: 1px solid var(--border);
+      padding-top: 0.75rem;
+      margin-top: 0.75rem;
+    }
+    .choices { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.4rem; }
+
+    .voice-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      background: #f0fdfa;
+      border: 1px solid #99f6e4;
+      padding: 0.65rem 0.85rem;
+      border-radius: 8px;
+      margin-bottom: 0.75rem;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .metric-box {
+      background: #f8faf9;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 0.8rem;
+    }
+    .metric-label { font-size: 0.8rem; color: var(--muted); }
+    .metric-val { font-size: 1.15rem; font-weight: 700; }
+
+    .evidence-banner {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      padding: 0.75rem 0.9rem;
+      margin-bottom: 1rem;
+      font-size: 0.92rem;
+    }
+
+    /* Responsive table pattern per modern-web-guidance */
+    .table-wrapper {
+      overflow: auto;
+      max-inline-size: 100%;
+      max-block-size: min(560px, 75vh);
+      container-type: inline-size;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      text-align: left;
+    }
+    caption {
+      font-weight: 700;
+      padding: 0.65rem 0.85rem;
+      text-align: left;
+      background: #f0f5f2;
+      border-bottom: 1px solid var(--border);
+    }
+    thead {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 2;
+      background: #f0f5f2;
+    }
+    th, td {
+      padding: 0.65rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      font-size: 0.92rem;
+    }
+    tbody th {
+      position: sticky;
+      inset-inline-start: 0;
+      z-index: 1;
+      background: #ffffff;
+      min-inline-size: 155px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .badge-high { background: #dcfce7; color: #166534; }
+    .badge-mod { background: #fef3c7; color: #92400e; }
+    .badge-low { background: #fee2e2; color: #991b1b; }
+
+    @container (width < 600px) {
+      table, thead, tbody, tr, th, td { display: block; }
+      thead { display: none; }
+      tr {
+        margin-block-end: 1rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      tbody th {
+        position: sticky;
+        inset-block-start: 0;
+        z-index: 2;
+        background: #f0f5f2;
+      }
+      td:nth-child(2)::before { content: var(--label-2, "Score") ": "; font-weight: 700; }
+      td:nth-child(3)::before { content: var(--label-3, "Climate & Water") ": "; font-weight: 700; }
+      td:nth-child(4)::before { content: var(--label-4, "Soil & Rotation") ": "; font-weight: 700; }
+      td:nth-child(5)::before { content: var(--label-5, "Risks") ": "; font-weight: 700; }
+      td:nth-child(6)::before { content: var(--label-6, "Action") ": "; font-weight: 700; }
+    }
+
+    /* Native modal dialog per modern-web-guidance */
+    dialog {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      max-width: 480px;
+      width: calc(100% - 2rem);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+    }
+    dialog:modal { overscroll-behavior: contain; }
+    dialog::backdrop {
+      background: rgba(15, 23, 42, 0.45);
+      overflow: hidden;
+      overscroll-behavior: contain;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.6rem;
+      margin-top: 1rem;
+    }
+
+    footer {
+      max-width: 1200px;
+      margin: 0 auto 2rem;
+      padding: 0 1.25rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link visually-hidden">Skip to main content</a>
+
+  <header>
+    <div class="header-inner">
+      <div>
+        <h1 id="main-content" tabindex="-1" data-i18n="app_title">Farm Memory — Crop-Rotation Decision Support</h1>
+        <p class="subtitle" data-i18n="app_subtitle">Supports your rotation choice with field memory &amp; NASA POWER daily climate history (does not predict yield).</p>
+      </div>
+      <nav aria-label="Language and data actions">
+        <button type="button" id="btn-lang" aria-pressed="false">Bahasa Malaysia</button>
+        <button type="button" id="btn-speak-summary" data-i18n="read_aloud">Read Summary Aloud</button>
+        <a id="btn-export-memory" class="btn-link" href="/api/farms/farm_001/export" download style="padding:0.45rem 0.75rem;border:1px solid var(--border);border-radius:6px;color:var(--ink);text-decoration:none;font-size:0.9rem;">Export Memory</a>
+        <button type="button" id="btn-delete-memory" data-i18n="clear_memory">Clear Saved Memory</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="top-grid">
+      <section class="card" aria-labelledby="map-heading">
+        <h2 id="map-heading" data-i18n="locality_heading">1. Select Farm Locality (Kedah)</h2>
+        <div id="map" aria-label="Interactive map of Kedah districts"></div>
+
+        <form id="location-form" novalidate>
+          <div class="field-row">
+            <div class="field">
+              <label for="locality-input" data-i18n="locality_label">Locality / District</label>
+              <span id="locality-hint" class="hint">Click a district on the map or type a place</span>
+              <input id="locality-input" type="text" required value="Kota Setar (Kampung Teluk Bagan)" aria-describedby="locality-hint" data-error="locality-error">
+              <div id="locality-error" class="error-msg"><span role="img" aria-label="Error">❌</span> Please enter a locality name.</div>
+            </div>
+            <div class="field">
+              <label for="lat-input">Latitude (°N)</label>
+              <span id="lat-hint" class="hint">Range: -90 to 90</span>
+              <input id="lat-input" type="number" step="0.0001" min="-90" max="90" required value="6.0704" aria-describedby="lat-hint" data-error="lat-error">
+              <div id="lat-error" class="error-msg"><span role="img" aria-label="Error">❌</span> Enter a latitude between -90 and 90.</div>
+            </div>
+            <div class="field">
+              <label for="lon-input">Longitude (°E)</label>
+              <span id="lon-hint" class="hint">Range: -180 to 180</span>
+              <input id="lon-input" type="number" step="0.0001" min="-180" max="180" required value="100.3557" aria-describedby="lon-hint" data-error="lon-error">
+              <div id="lon-error" class="error-msg"><span role="img" aria-label="Error">❌</span> Enter a longitude between -180 and 180.</div>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="month-select" data-i18n="month_label">Planting Start Month</label>
+              <select id="month-select">
+                <option value="1">January</option><option value="2">February</option>
+                <option value="3">March</option><option value="4">April</option>
+                <option value="5">May</option><option value="6">June</option>
+                <option value="7">July</option><option value="8">August</option>
+                <option value="9">September</option><option value="10">October</option>
+                <option value="11">November</option><option value="12">December</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="scenario-select" data-i18n="scenario_label">Historical Scenario ("What-If")</label>
+              <select id="scenario-select">
+                <option value="historical_average">10-Year Historical Average</option>
+                <option value="dry_planting">What-If: Driest Historical Season</option>
+                <option value="heavy_rain_harvest">What-If: Wettest Historical Season</option>
+                <option value="hot_season">What-If: Hottest Historical Season</option>
+              </select>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <section class="card" aria-labelledby="interview-heading">
+        <h2 id="interview-heading" data-i18n="interview_heading">2. Voice / Plain-Language Farm Interview</h2>
+        <div class="voice-bar">
+          <button type="button" id="btn-voice-ask" class="primary" data-i18n="voice_btn">Speak Answer (On-Device)</button>
+          <span id="voice-status" class="hint" style="margin:0;">On-device speech recognition; raw audio is never saved.</span>
+        </div>
+
+        <div id="questions-container"></div>
+
+        <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:1rem;">
+          <button type="button" id="btn-confirm-save" class="primary" data-i18n="save_memory_btn">Confirm &amp; Save to Farm Memory</button>
+          <button type="button" id="btn-compare" data-i18n="compare_btn">Compare 3 Rotations</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="card" aria-labelledby="results-heading">
+      <h2 id="results-heading" data-i18n="results_heading">3. Rotation Comparison &amp; Historical Evidence</h2>
+
+      <div id="climate-metrics" class="metrics-grid"></div>
+      <div id="evidence-banner" class="evidence-banner">Select a locality and click <strong>Compare 3 Rotations</strong> to load NASA POWER daily climate history.</div>
+
+      <div tabindex="0" role="region" aria-labelledby="rotation-table-caption" class="table-wrapper">
+        <table id="rotation-table">
+          <caption id="rotation-table-caption">Comparison of Existing Rotation vs. Two Alternatives</caption>
+          <thead>
+            <tr>
+              <th scope="col">Rotation Sequence</th>
+              <th scope="col">Resilience Score</th>
+              <th scope="col">Climate &amp; Water Fit</th>
+              <th scope="col">Soil &amp; Rotation Benefit</th>
+              <th scope="col">Risks</th>
+              <th scope="col">Farmer Action</th>
+            </tr>
+          </thead>
+          <tbody id="rotation-tbody"></tbody>
+        </table>
+      </div>
+      <p id="answer-basis" class="hint" style="margin-top:0.75rem;"></p>
+    </section>
+
+    <section class="card" aria-labelledby="chat-heading" style="margin-top:1rem;">
+      <h2 id="chat-heading">Ask a Question About Your Field or Rotations</h2>
+      <form id="chat-form" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+        <label for="chat-input" class="visually-hidden">Ask a farming question</label>
+        <input id="chat-input" type="text" placeholder="e.g. Why is chilli risky? or The lower part of my field always gets wet" style="flex:1;min-width:240px;padding:0.5rem;border:1px solid var(--border);border-radius:6px;">
+        <button type="submit" class="primary">Ask Advisor</button>
+      </form>
+      <div id="chat-reply" class="hint" style="margin-top:0.75rem;" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Farm Memory does not predict future yield or replace local agricultural officers. All climate figures are derived from NASA POWER daily Agroclimatology records.</p>
+  </footer>
+
+  <!-- Native modal dialog per modern-web-guidance (no role="dialog" or aria-modal) -->
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <h2 id="confirm-title" style="margin-top:0;">Confirm Farm Memory</h2>
+    <p id="confirm-readback"></p>
+    <form method="dialog" class="dialog-actions">
+      <button value="cancel" autofocus>Cancel</button>
+      <button value="confirm" class="primary">Yes, Save Memory</button>
+    </form>
+  </dialog>
+
+  <div id="live-polite" aria-live="polite" class="visually-hidden"></div>
+  <div id="live-assertive" aria-live="assertive" class="visually-hidden"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script>
+    let currentLang = "en";
+    let questions = [];
+    let lastComparison = null;
+    let pendingObservation = null;
+    const farmState = {
+      farm_id: "farm_001",
+      locality: "Kota Setar (Kampung Teluk Bagan)",
+      latitude: 6.0704,
+      longitude: 100.3557,
+      last_crop: "unknown",
+      irrigation: "unknown",
+      waterlogging_duration: "unknown",
+      flooded_last_season: "unknown",
+      soil_feel: "unknown",
+      soil_ph_known: "unknown",
+      priority: "lower_risk",
+      field_problems: "unknown",
+      trouble_spot: "unknown",
+      labour: "unknown",
+      field_observations: [],
+    };
+
+    const I18N = {
+      en: {
+        app_title: "Farm Memory — Crop-Rotation Decision Support",
+        app_subtitle: "Supports your rotation choice with field memory & NASA POWER daily climate history (does not predict yield).",
+        read_aloud: "Read Summary Aloud",
+        clear_memory: "Clear Saved Memory",
+        locality_heading: "1. Select Farm Locality (Kedah)",
+        interview_heading: "2. Voice / Plain-Language Farm Interview",
+        voice_btn: "Speak Answer (On-Device)",
+        save_memory_btn: "Confirm & Save to Farm Memory",
+        compare_btn: "Compare 3 Rotations",
+        results_heading: "3. Rotation Comparison & Historical Evidence",
+      },
+      ms: {
+        app_title: "Memori Ladang — Sokongan Keputusan Giliran Tanaman",
+        app_subtitle: "Menyokong keputusan giliran tanaman anda dengan rekod ladang & sejarah iklim harian NASA POWER (bukan ramalan hasil).",
+        read_aloud: "Baca Ringkasan",
+        clear_memory: "Padam Memori",
+        locality_heading: "1. Pilih Lokasi Ladang (Kedah)",
+        interview_heading: "2. Temu Bual Ladang (Suara / Pilihan Mudah)",
+        voice_btn: "Sebut Jawapan (Di Peranti)",
+        save_memory_btn: "Sahkan & Simpan ke Memori Ladang",
+        compare_btn: "Banding 3 Giliran Tanaman",
+        results_heading: "3. Perbandingan Giliran & Bukti Sejarah",
+      },
+    };
+
+    const livePolite = document.getElementById("live-polite");
+    const liveAssertive = document.getElementById("live-assertive");
+    function announce(msg, urgent = false) {
+      const target = urgent ? liveAssertive : livePolite;
+      target.textContent = "";
+      setTimeout(() => { target.textContent = msg; }, 50);
+    }
+
+    // ARIA validation sync per validate-input-after-interaction guide
+    const linkError = (el, shown) => {
+      const errorId = el.dataset.error;
+      if (!errorId) return;
+      const ids = (el.getAttribute("aria-describedby") || "").split(/\s+/).filter((id) => id && id !== errorId);
+      if (shown) ids.push(errorId);
+      if (ids.length) el.setAttribute("aria-describedby", ids.join(" "));
+      else el.removeAttribute("aria-describedby");
+    };
+    const syncAria = (el) => {
+      if (!el.matches?.("input, select")) return;
+      const invalid = el.matches(":user-invalid");
+      el.setAttribute("aria-invalid", invalid ? "true" : "false");
+      linkError(el, invalid);
+    };
+    document.querySelectorAll("#location-form input, #location-form select").forEach(syncAria);
+    document.addEventListener("blur", (e) => syncAria(e.target), true);
+    document.addEventListener("input", (e) => { if (e.target.hasAttribute("aria-invalid")) syncAria(e.target); });
+
+    // Initialize Leaflet map with Kedah districts
+    const map = L.map("map").setView([6.0, 100.45], 9);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+    const pin = L.marker([farmState.latitude, farmState.longitude]).addTo(map);
+
+    function setLocality(name, lat, lon) {
+      farmState.locality = name;
+      farmState.latitude = Number(lat.toFixed(4));
+      farmState.longitude = Number(lon.toFixed(4));
+      document.getElementById("locality-input").value = name;
+      document.getElementById("lat-input").value = farmState.latitude;
+      document.getElementById("lon-input").value = farmState.longitude;
+      pin.setLatLng([lat, lon]);
+      announce(`Selected ${name}`);
+    }
+
+    fetch("/api/districts")
+      .then((r) => r.json())
+      .then((geojson) => {
+        L.geoJSON(geojson, {
+          style: { color: "#0f766e", weight: 1.5, fillOpacity: 0.14 },
+          onEachFeature: (feat, layer) => {
+            const name = feat.properties?.name || "Kedah";
+            layer.bindTooltip(name);
+            layer.on("click", (ev) => {
+              setLocality(name, ev.latlng.lat, ev.latlng.lng);
+            });
+          },
+        }).addTo(map);
+      });
+
+    map.on("click", (ev) => {
+      setLocality(`Custom (${ev.latlng.lat.toFixed(3)}, ${ev.latlng.lng.toFixed(3)})`, ev.latlng.lat, ev.latlng.lng);
+    });
+
+    function renderQuestions() {
+      const container = document.getElementById("questions-container");
+      container.innerHTML = "";
+      for (const q of questions) {
+        const block = document.createElement("div");
+        block.className = "question-block";
+        const qText = currentLang === "ms" ? q.question_ms : q.question_en;
+        const h = document.createElement("h3");
+        h.textContent = qText;
+        block.appendChild(h);
+
+        const row = document.createElement("div");
+        row.className = "choices";
+        for (const c of q.choices) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "choice-btn";
+          btn.textContent = currentLang === "ms" ? c.label_ms : c.label_en;
+          btn.setAttribute("aria-pressed", farmState[q.field] === c.value ? "true" : "false");
+          btn.addEventListener("click", () => {
+            farmState[q.field] = c.value;
+            renderQuestions();
+          });
+          row.appendChild(btn);
+        }
+        block.appendChild(row);
+        container.appendChild(block);
+      }
+    }
+
+    // Native <dialog> read-back confirmation
+    const dialog = document.getElementById("confirm-dialog");
+    document.getElementById("btn-confirm-save").addEventListener("click", () => {
+      const readback = currentLang === "ms"
+        ? `Saya rekodkan: lokasi ${farmState.locality}, tanaman lepas: ${farmState.last_crop}, pengairan: ${farmState.irrigation}, air bertakung: ${farmState.waterlogging_duration}. Adakah ini tepat?`
+        : `I heard: locality ${farmState.locality}, last crop: ${farmState.last_crop}, irrigation: ${farmState.irrigation}, standing water: ${farmState.waterlogging_duration}. Save this to Farm Memory?`;
+      document.getElementById("confirm-readback").textContent = readback;
+      dialog.showModal();
+    });
+
+    dialog.addEventListener("close", async () => {
+      const choice = dialog.returnValue;
+      dialog.returnValue = "";
+      if (choice === "confirm") {
+        if (pendingObservation) {
+          farmState.field_observations = farmState.field_observations || [];
+          farmState.field_observations.push({
+            zone: pendingObservation.zone,
+            observation: pendingObservation.observation,
+            source: "verified_by_farmer",
+            recorded_at: new Date().toISOString(),
+          });
+          pendingObservation = null;
+        }
+        farmState.locality = document.getElementById("locality-input").value;
+        farmState.latitude = parseFloat(document.getElementById("lat-input").value);
+        farmState.longitude = parseFloat(document.getElementById("lon-input").value);
+        const resp = await fetch(`/api/farms/${farmState.farm_id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(farmState),
+        });
+        if (resp.ok) announce("Farm Memory saved.");
+      } else {
+        pendingObservation = null;
+      }
+    });
+
+    document.getElementById("btn-delete-memory").addEventListener("click", async () => {
+      await fetch(`/api/farms/${farmState.farm_id}`, { method: "DELETE" });
+      Object.assign(farmState, {
+        last_crop: "unknown", irrigation: "unknown", waterlogging_duration: "unknown",
+        flooded_last_season: "unknown", soil_feel: "unknown", soil_ph_known: "unknown",
+        field_problems: "unknown", trouble_spot: "unknown", labour: "unknown",
+        field_observations: [],
+      });
+      renderQuestions();
+      announce("Saved Farm Memory cleared.");
+    });
+
+    // On-device Web Speech API voice input
+    document.getElementById("btn-voice-ask").addEventListener("click", () => {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        announce("Browser speech recognition is unavailable; please tap a choice button.", true);
+        return;
+      }
+      const rec = new SpeechRec();
+      rec.lang = currentLang === "ms" ? "ms-MY" : "en-US";
+      rec.onresult = (ev) => {
+        const spoken = ev.results[0][0].transcript.toLowerCase();
+        document.getElementById("voice-status").textContent = `Heard: "${spoken}"`;
+        if (spoken.includes("padi") || spoken.includes("paddy") || spoken.includes("rice")) farmState.last_crop = "paddy_rice";
+        if (spoken.includes("cili") || spoken.includes("chili") || spoken.includes("chilli")) farmState.last_crop = "chilli_open_field";
+        if (spoken.includes("jagung") || spoken.includes("corn")) farmState.last_crop = "sweet_corn";
+        if (spoken.includes("banjir") || spoken.includes("flood")) farmState.flooded_last_season = "yes";
+        renderQuestions();
+      };
+      rec.start();
+    });
+
+    function renderComparison(data) {
+      lastComparison = data;
+      const c = data.climate_summary;
+      const geo = data.geotanih || {};
+      document.getElementById("climate-metrics").innerHTML = `
+        <div class="metric-box"><div class="metric-label">Recent 7d / 30d Rain</div><div class="metric-val">${c.recent_rain_7d_mm} / ${c.recent_rain_30d_mm} mm</div></div>
+        <div class="metric-box"><div class="metric-label">30d Soil Wetness (Top / Root)</div><div class="metric-val">${c.recent_gwettop ?? "?"} / ${c.recent_gwetroot ?? "?"}</div></div>
+        <div class="metric-box"><div class="metric-label">Longest Dry Spell</div><div class="metric-val">${c.longest_dry_spell_days} days</div></div>
+        <div class="metric-box"><div class="metric-label">Heavy-Rain Days (&ge;30mm)</div><div class="metric-val">${c.heavy_rain_days_per_season} / season</div></div>
+        <div class="metric-box"><div class="metric-label">Water Balance (P - ET0)</div><div class="metric-val">${c.water_balance_monthly_mm > 0 ? "+" : ""}${c.water_balance_monthly_mm} mm/mo</div></div>
+        <div class="metric-box"><div class="metric-label">GeoTanih Soil (Estimated)</div><div class="metric-val">${geo.soil_series || "Unknown"} (${geo.drainage_class || "unknown"})</div></div>
+      `;
+
+      const ev = data.evidence_coverage;
+      document.getElementById("evidence-banner").innerHTML =
+        `<strong>Evidence coverage: ${ev.level}</strong> (${data.scenario.replaceAll("_", " ")}, not a weather forecast)<br>` +
+        `<strong>Known:</strong> ${ev.known.join(", ")}<br>` +
+        `<strong>Unknown:</strong> ${ev.unknown.length ? ev.unknown.join(", ") : "None"}<br>` +
+        `<strong>Before changing rotation:</strong> ${ev.before_changing}`;
+
+      const tbody = document.getElementById("rotation-tbody");
+      tbody.innerHTML = "";
+      for (const r of data.rotations) {
+        const tr = document.createElement("tr");
+        const bandClass = r.resilience_band === "High" ? "badge-high" : (r.resilience_band === "Moderate" ? "badge-mod" : "badge-low");
+        const seq = currentLang === "ms" ? r.rotation_sequence_ms : r.rotation_sequence_en;
+        const fit = (currentLang === "ms" ? r.climate_water_fit_ms : r.climate_water_fit_en).join(" ");
+        const soil = currentLang === "ms" ? r.soil_rotation_benefit_ms : r.soil_rotation_benefit_en;
+        const risks = (currentLang === "ms" ? r.risks_ms : r.risks_en).join(" ");
+        const action = currentLang === "ms" ? r.farmer_action_ms : r.farmer_action_en;
+        const mkt = r.market_context || {};
+        const mktNote = mkt.trend && mkt.trend !== "unknown"
+          ? `<br><small>FAMA AMI: ${mkt.trend} (RM ${(mkt.price_band_rm_per_kg || []).join("-")}/kg). ${currentLang === "ms" ? mkt.disclaimer_ms : mkt.disclaimer_en}</small>`
+          : "";
+        const tag = r.is_existing ? (currentLang === "ms" ? " (Sedia Ada)" : " (Existing)") : "";
+
+        tr.innerHTML = `
+          <th scope="row">${seq}${tag}</th>
+          <td><span class="badge ${bandClass}">${r.score}/100 (${r.resilience_band})</span></td>
+          <td>${fit}</td>
+          <td>${soil}</td>
+          <td>${risks}</td>
+          <td>${action}${mktNote}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+      document.getElementById("answer-basis").textContent = `Answer basis: ${data.answer_basis}`;
+      announce("Rotation comparison updated.");
+    }
+
+    document.getElementById("btn-compare").addEventListener("click", async () => {
+      const form = document.getElementById("location-form");
+      if (!form.reportValidity()) return;
+
+      const payload = {
+        ...farmState,
+        locality: document.getElementById("locality-input").value,
+        latitude: parseFloat(document.getElementById("lat-input").value),
+        longitude: parseFloat(document.getElementById("lon-input").value),
+        planting_month: parseInt(document.getElementById("month-select").value, 10),
+        scenario: document.getElementById("scenario-select").value,
+      };
+      const resp = await fetch("/api/compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        announce("Could not fetch NASA POWER data.", true);
+        return;
+      }
+      renderComparison(await resp.json());
+    });
+
+    document.getElementById("btn-lang").addEventListener("click", () => {
+      currentLang = currentLang === "en" ? "ms" : "en";
+      document.documentElement.lang = currentLang;
+      const btn = document.getElementById("btn-lang");
+      btn.setAttribute("aria-pressed", currentLang === "ms" ? "true" : "false");
+      btn.textContent = currentLang === "ms" ? "English" : "Bahasa Malaysia";
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const key = el.getAttribute("data-i18n");
+        if (I18N[currentLang][key]) el.textContent = I18N[currentLang][key];
+      });
+      renderQuestions();
+      if (lastComparison) renderComparison(lastComparison);
+    });
+
+    document.getElementById("chat-form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const input = document.getElementById("chat-input");
+      const msg = input.value.trim();
+      if (!msg) return;
+      const resp = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          farm_id: farmState.farm_id,
+          message: msg,
+          language: currentLang,
+          comparison: lastComparison,
+        }),
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      document.getElementById("chat-reply").textContent = `${data.reply} (${data.answer_basis})`;
+      if (data.pending_confirmation) {
+        pendingObservation = data.pending_confirmation;
+        document.getElementById("confirm-readback").textContent =
+          currentLang === "ms" ? pendingObservation.prompt_ms : pendingObservation.prompt_en;
+        dialog.showModal();
+      }
+      input.value = "";
+    });
+
+    document.getElementById("btn-speak-summary").addEventListener("click", () => {
+      if (!lastComparison || !("speechSynthesis" in window)) return;
+      window.speechSynthesis.cancel();
+      const top = lastComparison.rotations[1] || lastComparison.rotations[0];
+      const msg = currentLang === "ms"
+        ? `Pilihan alternatif utama ialah ${top.crop_name_ms} dengan skor ${top.score}. ${top.farmer_action_ms}`
+        : `Top alternative is ${top.crop_name_en} with resilience score ${top.score}. ${top.farmer_action_en}`;
+      const utter = new SpeechSynthesisUtterance(msg);
+      utter.lang = currentLang === "ms" ? "ms-MY" : "en-MY";
+      window.speechSynthesis.speak(utter);
+    });
+
+    // Load questions and saved Farm Memory on startup
+    Promise.all([
+      fetch("/api/questions").then((r) => r.json()),
+      fetch(`/api/farms/${farmState.farm_id}`).then((r) => r.json()),
+    ]).then(([qData, savedFarm]) => {
+      questions = qData.questions;
+      Object.assign(farmState, savedFarm);
+      setLocality(farmState.locality, farmState.latitude, farmState.longitude);
+      renderQuestions();
+    });
+  </script>
+</body>
+</html>

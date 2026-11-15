@@ -1,0 +1,23 @@
+{
+  "projectId": "603294228811004891",
+  "title": "PetaniPal App Design",
+  "colorMode": "LIGHT",
+  "fonts": {
+    "headline": "Fraunces",
+    "body": "Plus Jakarta Sans",
+    "mono": "JetBrains Mono"
+  },
+  "colors": {
+    "background": "#FAF7F2",
+    "surface": "#FFFFFF",
+    "surfaceSub": "#F2EDE4",
+    "ink": "#162419",
+    "inkSecondary": "#4A584C",
+    "inkMuted": "#7A867B",
+    "forestPrimary": "#1F6A3B",
+    "forestDark": "#154D2B",
+    "sproutAccent": "#3DA35D",
+    "sproutTint": "#E5F3E9",
+    "border": "#E5DEC9"
+  }
+}

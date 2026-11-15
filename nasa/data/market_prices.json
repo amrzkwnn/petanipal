@@ -1,0 +1,21 @@
+{
+  "source": "FAMA Malaysia & OpenDOSM reference farmgate/wholesale range (Kedah / Northern Corridor)",
+  "updated_at": "2026-04-01",
+  "disclaimer_en": "Historical price range only. Actual harvest price depends on market timing, grade, and buyer. This is context, not a future-price promise.",
+  "disclaimer_ms": "Julat harga sejarah sahaja. Harga jualan sebenar bergantung pada masa pasaran, gred, dan pembeli. Ini adalah konteks, bukan janji harga masa depan.",
+  "crops": {
+    "jagung_manis": { "unit": "cob", "low_myr": 0.90, "high_myr": 1.60, "volatility": "low" },
+    "kacang_tanah": { "unit": "kg", "low_myr": 5.00, "high_myr": 7.50, "volatility": "low" },
+    "keledek": { "unit": "kg", "low_myr": 2.20, "high_myr": 4.20, "volatility": "low" },
+    "padi_sawah": { "unit": "kg", "low_myr": 1.30, "high_myr": 1.80, "volatility": "low" },
+    "betik": { "unit": "kg", "low_myr": 2.50, "high_myr": 4.80, "volatility": "medium" },
+    "nanas": { "unit": "kg", "low_myr": 3.00, "high_myr": 5.50, "volatility": "medium" },
+    "chilli_open_field": { "unit": "kg", "low_myr": 7.50, "high_myr": 14.00, "volatility": "high" },
+    "mung_bean": { "unit": "kg", "low_myr": 4.20, "high_myr": 6.00, "volatility": "low" },
+    "groundnut": { "unit": "kg", "low_myr": 5.00, "high_myr": 7.50, "volatility": "low" },
+    "cucumber": { "unit": "kg", "low_myr": 1.80, "high_myr": 3.60, "volatility": "medium" },
+    "okra": { "unit": "kg", "low_myr": 3.20, "high_myr": 5.80, "volatility": "medium" },
+    "maize_grain_or_sweet": { "unit": "cob", "low_myr": 0.90, "high_myr": 1.60, "volatility": "low" },
+    "leafy_greens_short_cycle": { "unit": "kg", "low_myr": 2.20, "high_myr": 4.50, "volatility": "medium" }
+  }
+}

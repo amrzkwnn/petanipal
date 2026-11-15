@@ -1,0 +1,433 @@
+# Farm Memory
+
+## Voice-first crop-rotation decision support for Malaysian farmers
+
+## One-sentence idea
+
+Farm Memory is a multilingual, voice-first app that remembers a farmer's field history, combines it with local soil context and NASA climate history, and helps the farmer compare crop-rotation options under uncertain weather.
+
+It supports the farmer's decision. It does not decide what the farmer must plant.
+
+## The problem
+
+Choosing a crop rotation is difficult when rainfall timing shifts, heat increases, water is limited, soil health is declining, or intense rain creates flooding and erosion risk. A rotation that is good for soil may require too much water; a crop with a good market price may be risky in a wet season; a crop that worked elsewhere may not fit this field.
+
+Existing farm knowledge is often held in a farmer's memory: which corner floods, which crop failed after a dry spell, which pest returns after a particular crop, or when irrigation becomes unavailable. That knowledge is rarely captured by a generic weather dashboard.
+
+## The solution
+
+The app holds a **Farm Memory Layer** for each saved farm and guides the farmer through a spoken conversation.
+
+It asks simple questions in the farmer's preferred language, for example:
+
+> “What was planted here last season?”
+
+> “Did any part of this field flood, dry out, or have a pest problem?”
+
+> “Do you have irrigation during the dry period?”
+
+> “What matters most for the next rotation: water saving, soil health, income, or lower risk?”
+
+The app compares the farmer's existing rotation with two alternative rotations. It uses historical climate evidence and local inputs to reveal benefits, risks, uncertainty, and questions that need local expert review.
+
+It also lets the farmer ask ordinary farming questions at any point. The question library guides the facts that the system needs to collect; it does not limit the farmer's conversation.
+
+## What the farmer receives
+
+For every rotation option, the app gives a clear spoken and visual explanation:
+
+```text
+Rotation: [crop sequence]
+
+Climate and water fit
+• Why the rainfall, heat, and sunlight pattern fits or does not fit
+
+Soil and rotation benefit
+• Soil-cover, nutrient, drainage, or crop-family benefit
+
+Risks
+• Dry spell, flood, erosion, pest-cycle, or timing risks
+
+Missing information
+• Facts the app does not know, such as a current soil pH test
+
+Farmer action
+• What to review before committing to the rotation
+```
+
+The app should say:
+
+> “This option has lower dry-spell exposure based on the historical climate record, but soil pH and buyer availability still need checking.”
+
+It should also answer follow-up questions in context, for example:
+
+> “Why is this option risky?”
+
+> “What if the rain starts late?”
+
+> “Can I grow chilli after maize?”
+
+The answer must distinguish between an evidence-based comparison, a general farming explanation, and something that needs a local agricultural expert or a soil test.
+
+It must not say:
+
+> “Plant this crop.”
+
+> “This crop will produce a guaranteed yield.”
+
+## Prototype scope
+
+The prototype should be intentionally small and credible.
+
+- One named Malaysian farming locality, not the entire country.
+- Four to six locally relevant crops.
+- One existing rotation plus two alternatives.
+- English and Bahasa Malaysia first; add other languages only if the conversation and translations are checked by fluent speakers.
+- NASA POWER for historical climate evidence.
+- GeoTanih for available local soil-suitability context.
+- A small, reviewed crop-characteristics table.
+- Voice-led farm-profile collection and a structured rotation comparison.
+
+The locality and crop list must be chosen together. The app should not claim nationwide suitability.
+
+## Farmer-friendly voice interview
+
+Farmers should never be asked to understand terms such as “irrigation reliability,” “drainage class,” or “soil texture.” The app asks about observable experience, then converts the confirmed answer into a structured value in the background.
+
+| Backend concept | Voice question the farmer hears | Spoken answer choices |
+|---|---|---|
+| Irrigation availability | “When there is no rain, can you still water this field?” | Always / Sometimes / No / Not sure |
+| Drainage | “After heavy rain, how long does water stay on the field?” | Gone the same day / One or two days / More than two days / Not sure |
+| Flooding | “Did this field flood last season?” | Yes / No / Not sure |
+| Soil feel | “When the soil is wet, does it feel sticky, loose and sandy, or in-between?” | Sticky / Sandy / In-between / Not sure |
+| Soil test | “Have you tested the soil recently?” | Yes, I know the result / Yes, but I do not know it / No test |
+| Crop history | “What did you plant here last season?” | Spoken answer, repeated back for confirmation |
+| Field problems | “What problem did you see most: insects, disease, weeds, too much water, or too little water?” | Spoken answer or named choices |
+| Trouble spot | “Which area causes the most trouble?” | Low/flooding area / Dry area / Slope / No problem / Not sure |
+| Farmer priority | “What matters most for your next crop?” | Save water / Improve soil / Earn more / Lower risk |
+| Labour | “Will you have enough people to plant and harvest on time?” | Yes / Maybe / No / Not sure |
+
+Each important answer is read back before saving. For example:
+
+> “I heard that water stays in this field for more than two days after heavy rain. Is that correct?”
+
+### Question library, not a restricted conversation
+
+The question library is an expert-reviewed list of the information required to make a rotation comparison. Each question has a plain-language version, a structured field to fill, allowed answer types, and conditions for when it is useful.
+
+```text
+Question record: drainage
+Farmer hears: “After heavy rain, how long does water stay on the field?”
+Structured field: waterlogging_duration
+Ask when: a crop is flood-sensitive, GeoTanih indicates a drainage limitation,
+or the farmer reports flooding
+```
+
+The system starts with essential facts (field, crop history, intended season, water access, and priorities), then asks only the next useful question. It may use GeoTanih or the crop profile to select a follow-up. For example, a mapped drainage limitation can trigger a simple confirmation question about standing water.
+
+The LLM handles natural conversation and understands different ways of saying the same thing. It may ask a question from the approved library in the farmer's language, but it must not invent a new high-impact data-collection rule or silently make up a farm fact.
+
+### When a farmer asks an open question
+
+A farmer can ask questions that are not in the interview. The app classifies the request before answering:
+
+| Question type | System response |
+|---|---|
+| Explanation of an app result | Explain the relevant risk, evidence, and uncertainty using the selected field and rotation. |
+| Personalised “what if” question | Run a named historical scenario, such as a locally dry planting period or heavy rain during harvest. State that it is a scenario, not a weather forecast. |
+| General farming question | Give a simple, grounded explanation from the reviewed knowledge base. |
+| Question needing missing facts | Say what is unknown and ask one optional, relevant follow-up question. |
+| Diagnosis, chemical-use, safety, or other high-stakes question | Give cautious general guidance and direct the farmer to an appropriate local agricultural officer, product label, soil test, or expert. Do not diagnose or prescribe with false certainty. |
+| Outside the evidence or product scope | Clearly say that the app cannot answer reliably. |
+
+Questions do not automatically become Farm Memory. If the farmer reveals a useful new field fact, the app must ask permission before saving it:
+
+```text
+Farmer: “The lower part of my field always gets wet.”
+App: “Should I remember that the lower part stays wet after rain?”
+Farmer: “Yes.”
+Saved: field zone = lower area; drainage observation = standing water after rain;
+source = farmer-confirmed; recorded date = current date.
+```
+
+If the farmer only asks, “How do I improve drainage?”, nothing is saved.
+
+## Unknown information is allowed
+
+“I do not know” and “skip” are valid answers. Missing information must not be silently guessed or treated as a negative farm condition.
+
+The app applies three evidence labels:
+
+| Label | Meaning |
+|---|---|
+| Verified by farmer | The farmer confirmed the information or provided a recent test/record. |
+| Estimated from map or climate data | The value is an environmental estimate, not a field observation. |
+| Unknown | The app does not have this information and must state the gap. |
+
+The result should show evidence coverage rather than a misleading accuracy percentage:
+
+```text
+Evidence coverage: Medium
+
+Known: rainfall history, temperature, slope, and crop history
+Unknown: soil pH and irrigation availability
+
+Before changing rotation: check soil pH and water access.
+```
+
+The assistant should request only one useful missing fact at a time. For example:
+
+> “After the next heavy rain, tell me how long water stays in this field. That will improve the comparison.”
+
+## Data used
+
+| Data layer | Information used | Purpose |
+|---|---|---|
+| Farmer Memory | Crop history, observed flooding, irrigation, pests, labour/equipment limits, soil-test values, priorities | Captures facts that maps and satellites cannot know about the actual farm. |
+| NASA POWER | Daily rainfall, temperature, maximum temperature, humidity, sunlight, and optional soil-temperature indicators | Calculates historical dry spells, heat periods, rainfall variation, extreme-rain days, and growing-window conditions. |
+| GeoTanih | Soil series, texture, drainage, slope-related limitations, salinity, organic material, and other available suitability factors | Adds Malaysia-specific soil context. Verify coverage and use local advice where the mapping is incomplete. |
+| Crop library | Crop family, crop duration, planting window, water need, flood tolerance, heat tolerance, pH preference, root type, nitrogen contribution, ground cover, and pest-host relationships | Makes rotation options comparable. Each entry must be sourced or reviewed locally. |
+| Market context, optional | Local price trend, buyer access, storage, and transport constraints | Prevents a technically suitable crop from being presented as practical when it cannot be sold. |
+
+### How the app grounds its knowledge
+
+The app should not treat an LLM's general knowledge as proof for a farm recommendation. It grounds each meaningful answer in the most relevant available source:
+
+1. **Farm Memory** for farmer-confirmed facts about this field.
+2. **NASA POWER** for historical weather calculations at the selected locality.
+3. **GeoTanih** for mapped soil context at the selected place, where coverage is available.
+4. **Reviewed crop and market libraries** for crop requirements and practical context.
+5. **A clearly labelled knowledge gap** when the evidence is missing.
+
+For a personalised answer, the backend retrieves only the relevant structured records and calculation result for the LLM to explain. The LLM does not browse the open web during a farmer session, create a new crop profile from an unverified page, or present unsupported knowledge as local fact.
+
+Every substantive answer should retain an answer basis for audit and explanation:
+
+```text
+Answer basis: NASA POWER rainfall history (2016–2025), GeoTanih drainage context,
+crop-library profile for open-field chilli, farmer-confirmed irrigation availability.
+Unknown: recent soil pH test.
+```
+
+## Crop library and market-data sourcing
+
+The farmer should only need to name a crop they are considering. The app should supply the technical crop facts from a reviewed local library, not ask the farmer to know crop duration, botanical family, water requirement, or disease-host information.
+
+### Use a local, reviewed crop library
+
+```text
+Farmer speaks a crop name
+        ↓
+Speech-to-text and LLM normalise the name to a crop ID
+        ↓
+The backend looks up the verified crop profile
+        ↓
+The rotation engine uses the profile in its comparison
+```
+
+The app should confirm ambiguous names or production systems. For example:
+
+> “Do you mean chilli in an open field or chilli using fertigation?”
+
+For the prototype, create four to six local crop profiles manually from official Malaysian Department of Agriculture or MARDI guidance. Each profile must include a source URL and review date.
+
+```json
+{
+  "crop_id": "chilli_open_field",
+  "names": ["cili", "chilli"],
+  "family": "Solanaceae",
+  "duration_days": { "min": 120, "max": 180 },
+  "water_need": "medium",
+  "flood_tolerance": "low",
+  "heat_tolerance": "medium",
+  "soil_preferences": ["well-drained"],
+  "nitrogen_effect": "high demand",
+  "ground_cover": "medium",
+  "rotation_warnings": ["avoid repeating related crops"],
+  "source_url": "official source",
+  "last_reviewed": "date"
+}
+```
+
+The LLM may help recognise the farmer's wording and explain the verified profile. It must not search the web during a farmer session and silently save unreviewed information into the crop library. If a profile is missing, the app says that it does not yet have verified information for that crop in the selected area.
+
+### Market context
+
+Use official Malaysian market information where an authorised feed, export, download, or permission is available. FAMA's Agri Market Insight (AMI) is the preferred starting source because it tracks farm, wholesale, and retail prices across Malaysia.
+
+For the prototype:
+
+1. Select the supported crops and prototype locality.
+2. Obtain a recent price snapshot and trend from an official source.
+3. Save a dated record in the project's `market_prices` table.
+4. Present it only as context, never as a guarantee of future income.
+
+```text
+Market context: recent farm-gate price trend is rising.
+Last updated: [date]
+This is context, not a future-price promise.
+```
+
+### Data-access policy
+
+- Prefer official APIs, permitted exports, downloadable data, or written access permission.
+- Use web search only during research and library curation.
+- Do not make live web scraping the core product data pipeline; it is fragile and may breach source terms.
+- Keep each crop and market record's source URL, source date, last-reviewed date, and data-use notes.
+
+## What the system calculates
+
+The prototype does not forecast crop yield or promise future weather. It calculates an explainable historical-risk and resilience comparison.
+
+### Daily data in, simple insight out
+
+NASA POWER daily data is the source of truth for climate calculations. Do not use monthly averages as the only source: the same monthly rainfall total can mean regular light rain or one damaging storm followed by a long dry spell.
+
+The backend stores or caches daily values, calculates short-term and crop-season features, and shows farmers a simple monthly or seasonal summary.
+
+```text
+NASA POWER daily data
+        ↓
+Backend calculates dry spells, heavy-rain days, hot days,
+7-day/30-day rainfall, and crop-season totals
+        ↓
+Risk engine compares rotation options
+        ↓
+Farmer sees plain-language monthly and seasonal insights
+```
+
+For each crop window, the backend derives:
+
+- seasonal rainfall total;
+- rainfall distribution, not only the total;
+- longest dry spell;
+- number of unusually heavy-rain days;
+- average and maximum temperature;
+- heat-stress indicators;
+- sunlight and humidity context;
+- overlap between the crop calendar and historically difficult conditions.
+
+The farmer-facing explanation should use language such as:
+
+- “Rain was lower than usual during the planting period.”
+- “There were two long dry spells.”
+- “Heavy rain was concentrated near harvest.”
+- “The hottest days occurred during flowering.”
+
+It then combines these climate signals with the farmer's inputs and crop characteristics to compare:
+
+- climate and water fit;
+- drainage and flood exposure;
+- erosion or bare-soil exposure;
+- soil-health contribution;
+- repeated crop-family and pest-cycle concern;
+- feasibility under the farmer's water, labour, and budget constraints.
+
+## AI design: LLM first, ML later
+
+### Do not use an LLM to analyse raw NASA or soil data
+
+Raw NASA POWER time series and GeoTanih attributes should be read, cleaned, and calculated by normal backend code. This is more reliable, cheaper, testable, and easier to explain than asking an LLM to inspect large raw data files.
+
+### Use an LLM for the conversation layer
+
+The LLM's permitted jobs are:
+
+1. Understand the farmer's spoken answer.
+2. Convert it into a strict structured record.
+3. Ask the next missing question in plain language.
+4. Confirm critical facts back to the farmer.
+5. Explain the completed, rule-based comparison in the chosen language.
+6. Translate technical terms into farmer-friendly wording.
+
+The LLM must not invent crop facts, silently change a score, or present an unsupported conclusion as an agricultural recommendation.
+
+### Do not train ML in the first prototype
+
+NASA POWER supplies environmental inputs, not outcome labels. It does not contain each farm's yield, crop failure, pest event, profit, or management practice. Training a crop-success model without those labels would create a misleading claim.
+
+ML becomes appropriate later only after collecting consented, labelled seasonal outcomes across many farms, such as crop, planting date, yield class, failure reason, irrigation use, soil test, and farmer observations. Until then, the system is an explainable scenario and risk comparison engine.
+
+## Recommended system flow
+
+```text
+Farmer speaks
+        ↓
+Speech-to-text
+        ↓
+LLM extracts a structured answer and asks for confirmation
+        ↓
+Farm Memory record is updated
+        ↓
+Backend fetches/caches NASA POWER and soil-context data
+        ↓
+Deterministic feature and risk engine compares three rotations
+        ↓
+LLM turns verified structured results into a simple local-language explanation
+        ↓
+Text-to-speech reads the answer to the farmer
+```
+
+## Example Farm Memory record
+
+```json
+{
+  "farm_id": "farm_001",
+  "location": { "locality": "chosen prototype locality", "latitude": null, "longitude": null },
+  "field_observations": [
+    "Lower corner floods after prolonged rain",
+    "Irrigation is only available until April"
+  ],
+  "crop_history": [
+    { "season": "previous season", "crop": "farmer-entered crop", "issue": "farmer-entered issue" }
+  ],
+  "soil": { "texture": "unknown", "drainage": "unknown", "ph": "unknown" },
+  "priorities": { "water": 0, "soil_health": 0, "income": 0, "risk_reduction": 0 }
+}
+```
+
+Unknown is a valid value. The app must never invent a soil test, irrigation capacity, or crop history.
+
+## Privacy and voice design
+
+The product promise should be precise:
+
+> “Farm Memory does not save raw voice recordings. It stores only the farmer-approved structured farm information needed to provide the service.”
+
+To keep that promise:
+
+1. Record only the current answer; do not keep continuous background audio.
+2. Transcribe the answer, extract the approved structured fact, and immediately discard the raw audio buffer.
+3. Do not store audio files, audio URLs, waveform data, or voiceprints in the application database, logs, analytics, backups, or crash reports.
+4. Read critical facts back to the farmer: “I heard that irrigation ends in April. Is that correct?” Save only after confirmation.
+5. Let the farmer review, correct, export, or delete Farm Memory entries.
+6. Store the minimum necessary farm data; protect account and farm records with access controls and encryption.
+7. Clearly explain whether a selected speech-to-text provider receives audio for processing.
+
+### Important distinction when using the OpenAI API
+
+If the app sends a voice recording to an external speech-to-text API, the application may delete its local copy immediately, but the audio still leaves the device for processing. For the strongest possible “voice never leaves the device” promise, use on-device speech-to-text and send only confirmed text or structured fields to the backend.
+
+If OpenAI transcription is used, disclose that audio is sent for transcription. OpenAI states that API content is not used to train its models by default unless the customer opts in; however, default abuse-monitoring logs may be retained for up to 30 days. Review the current retention settings and applicable privacy obligations before deployment.
+
+## API-key safety
+
+- Never put an OpenAI API key in the mobile app, browser code, screenshots, source control, or a public repository.
+- Keep it only in a backend environment variable or secret manager.
+- The farmer app calls the project's backend; the backend calls OpenAI.
+- Use a separate project/service credential for a deployed app, set a budget limit, and rotate/revoke a key if it is exposed.
+
+## Validation for the prototype
+
+The prototype cannot validate future crop yield. It can validate its data and logic.
+
+1. Compare charts and values against NASA POWER for the same place and dates.
+2. Test expected scenarios: a water-demanding rotation should receive a higher dry-spell risk in a dry historical period; poor-drainage-sensitive crops should receive a higher heavy-rain concern.
+3. Replay historically dry, wet, and hot seasons to verify that the feature calculations behave as intended.
+4. Display assumptions, data dates, evidence, uncertainties, and missing inputs for every option.
+5. State clearly that the output is decision support and requires farmer and local-expert judgment.
+
+## Project claim
+
+> Farm Memory does not predict a farmer's future yield or replace agricultural expertise. It listens to farmer-approved field knowledge, combines that knowledge with local soil context and NASA climate history, and explains how crop-rotation options may differ in resilience under historically observed weather uncertainty.
+

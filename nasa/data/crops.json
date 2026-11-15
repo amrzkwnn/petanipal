@@ -1,0 +1,200 @@
+{
+  "locality": "Sungai Petani, Kedah",
+  "last_updated": "2026-11-15",
+  "crops": [
+    {
+      "crop_id": "jagung_manis",
+      "names": {
+        "en": ["sweet corn", "corn", "maize"],
+        "ms": ["jagung", "jagung manis"]
+      },
+      "production_system": "open_field",
+      "cycle_type": "seasonal",
+      "family": "Poaceae",
+      "duration_days": { "min": 65, "max": 80 },
+      "water_need": "medium_high",
+      "flood_tolerance": "low",
+      "heat_tolerance": "medium",
+      "soil_preferences": ["well-drained", "loamy", "fertile"],
+      "ph_range": { "min": 5.5, "max": 6.8 },
+      "nitrogen_effect": "high_demand",
+      "ground_cover": "medium",
+      "rotation_warnings": [
+        "Avoid repeating Poaceae (maize/rice) consecutively to reduce stem borer and foliar pest pressure.",
+        "High nitrogen demand; pairs well after a legume such as kacang tanah."
+      ],
+      "geotanih_crop_id": 25,
+      "geotanih_crop_name": "Jagung",
+      "source_name": "DOA Malaysia / GeoTanih Crop Criteria",
+      "source_url": "https://geotanih.doa.gov.my/api/suitability/cropCriteria?inMalay=true",
+      "last_reviewed": "2026-11-15",
+      "review_status": "draft_needs_local_review"
+    },
+    {
+      "crop_id": "kacang_tanah",
+      "names": {
+        "en": ["groundnut", "peanut", "legume"],
+        "ms": ["kacang tanah", "kekacang"]
+      },
+      "production_system": "open_field",
+      "cycle_type": "seasonal",
+      "family": "Fabaceae",
+      "duration_days": { "min": 90, "max": 115 },
+      "water_need": "medium",
+      "flood_tolerance": "low",
+      "heat_tolerance": "high",
+      "soil_preferences": ["well-drained", "sandy_loam", "loose"],
+      "ph_range": { "min": 5.5, "max": 6.5 },
+      "nitrogen_effect": "nitrogen_fixing",
+      "ground_cover": "high",
+      "rotation_warnings": [
+        "Avoid waterlogged or heavy sticky clay soils; pod rot risk increases if water stands.",
+        "Do not repeat Fabaceae in consecutive seasons to limit soil-borne disease."
+      ],
+      "geotanih_crop_id": 29,
+      "geotanih_crop_name": "Kacang Tanah",
+      "source_name": "DOA Malaysia / GeoTanih Crop Criteria",
+      "source_url": "https://geotanih.doa.gov.my/api/suitability/cropCriteria?inMalay=true",
+      "last_reviewed": "2026-11-15",
+      "review_status": "draft_needs_local_review"
+    },
+    {
+      "crop_id": "keledek",
+      "names": {
+        "en": ["sweet potato", "sweet potatoes"],
+        "ms": ["keledek", "ubi keledek"]
+      },
+      "production_system": "open_field",
+      "cycle_type": "seasonal",
+      "family": "Convolvulaceae",
+      "duration_days": { "min": 90, "max": 120 },
+      "water_need": "medium",
+      "flood_tolerance": "low",
+      "heat_tolerance": "high",
+      "soil_preferences": ["well-drained", "sandy_loam", "raised_beds"],
+      "ph_range": { "min": 5.5, "max": 6.5 },
+      "nitrogen_effect": "medium_demand",
+      "ground_cover": "high",
+      "rotation_warnings": [
+        "Avoid repeating Convolvulaceae (e.g., keledek or kangkung) to reduce sweet potato weevil buildup.",
+        "Good ground cover helps suppress weeds and reduce soil erosion."
+      ],
+      "geotanih_crop_id": 31,
+      "geotanih_crop_name": "Keledek",
+      "source_name": "DOA Malaysia / GeoTanih Crop Criteria",
+      "source_url": "https://geotanih.doa.gov.my/api/suitability/cropCriteria?inMalay=true",
+      "last_reviewed": "2026-11-15",
+      "review_status": "draft_needs_local_review"
+    },
+    {
+      "crop_id": "padi_sawah",
+      "names": {
+        "en": ["paddy", "wetland rice", "rice"],
+        "ms": ["padi", "padi sawah"]
+      },
+      "production_system": "bunded_wetland",
+      "cycle_type": "seasonal",
+      "family": "Poaceae",
+      "duration_days": { "min": 105, "max": 125 },
+      "water_need": "high",
+      "flood_tolerance": "high",
+      "heat_tolerance": "medium",
+      "soil_preferences": ["clay_loam", "water_retentive", "bunded_lowland"],
+      "ph_range": { "min": 5.0, "max": 6.5 },
+      "nitrogen_effect": "high_demand",
+      "ground_cover": "high",
+      "rotation_warnings": [
+        "Requires reliable water supply or seasonal rainfall; unsuitable for dry, non-irrigated upland plots.",
+        "Confirm whether field is bunded/irrigated before comparing with dryland crops."
+      ],
+      "geotanih_crop_id": 32,
+      "geotanih_crop_name": "Padi Sawah",
+      "source_name": "DOA Malaysia / GeoTanih Crop Criteria",
+      "source_url": "https://geotanih.doa.gov.my/api/suitability/cropCriteria?inMalay=true",
+      "last_reviewed": "2026-11-15",
+      "review_status": "draft_needs_local_review"
+    },
+    {
+      "crop_id": "betik",
+      "names": {
+        "en": ["papaya"],
+        "ms": ["betik"]
+      },
+      "production_system": "open_field",
+      "cycle_type": "multi_season",
+      "family": "Caricaceae",
+      "duration_days": { "min": 270, "max": 365 },
+      "water_need": "medium_high",
+      "flood_tolerance": "low",
+      "heat_tolerance": "medium",
+      "soil_preferences": ["well-drained", "loamy", "no_standing_water"],
+      "ph_range": { "min": 5.5, "max": 6.5 },
+      "nitrogen_effect": "high_demand",
+      "ground_cover": "medium",
+      "rotation_warnings": [
+        "Multi-season crop (9-12+ months to first harvest); not a short-term seasonal swap.",
+        "Very sensitive to standing water and root rot; avoid low-lying flood-prone corners."
+      ],
+      "geotanih_crop_id": 19,
+      "geotanih_crop_name": "Betik",
+      "source_name": "DOA Malaysia / GeoTanih Crop Criteria",
+      "source_url": "https://geotanih.doa.gov.my/api/suitability/cropCriteria?inMalay=true",
+      "last_reviewed": "2026-11-15",
+      "review_status": "draft_needs_local_review"
+    },
+    {
+      "crop_id": "nanas",
+      "names": {
+        "en": ["pineapple"],
+        "ms": ["nanas"]
+      },
+      "production_system": "open_field",
+      "cycle_type": "multi_season",
+      "family": "Bromeliaceae",
+      "duration_days": { "min": 360, "max": 450 },
+      "water_need": "low",
+      "flood_tolerance": "low",
+      "heat_tolerance": "high",
+      "soil_preferences": ["well-drained", "peat_or_sandy_loam", "acid_tolerant"],
+      "ph_range": { "min": 4.5, "max": 6.0 },
+      "nitrogen_effect": "medium_demand",
+      "ground_cover": "medium",
+      "rotation_warnings": [
+        "Multi-season crop (12-15+ months); locks the plot for over a year.",
+        "Tolerates drier spells and acidic soils better than most crops, but cannot tolerate prolonged waterlogging."
+      ],
+      "geotanih_crop_id": 28,
+      "geotanih_crop_name": "Nanas",
+      "source_name": "DOA Malaysia / GeoTanih Crop Criteria",
+      "source_url": "https://geotanih.doa.gov.my/api/suitability/cropCriteria?inMalay=true",
+      "last_reviewed": "2026-11-15",
+      "review_status": "draft_needs_local_review"
+    },
+    {
+      "crop_id": "chilli_open_field",
+      "names": {
+        "en": ["chilli", "chili", "open-field chilli"],
+        "ms": ["cili", "cabai", "cili terbuka"]
+      },
+      "production_system": "open_field",
+      "cycle_type": "seasonal",
+      "family": "Solanaceae",
+      "duration_days": { "min": 120, "max": 180 },
+      "water_need": "medium",
+      "flood_tolerance": "low",
+      "heat_tolerance": "medium",
+      "soil_preferences": ["well-drained", "loamy", "raised_beds"],
+      "ph_range": { "min": 5.5, "max": 6.8 },
+      "nitrogen_effect": "high_demand",
+      "ground_cover": "medium",
+      "rotation_warnings": [
+        "Avoid repeating Solanaceae (chilli, tomato, brinjal) consecutively to reduce bacterial wilt and anthracnose pressure.",
+        "Sensitive to waterlogging; plant on raised beds with clear field drains."
+      ],
+      "source_name": "DOA Malaysia Open-Field Chilli Guideline",
+      "source_url": "https://www.doa.gov.my/",
+      "last_reviewed": "2026-11-15",
+      "review_status": "draft_needs_local_review"
+    }
+  ]
+}

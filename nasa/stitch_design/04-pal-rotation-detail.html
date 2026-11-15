@@ -1,0 +1,211 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>Pal Rotation Detail</title>
+<!-- Tailwind CSS v3 with Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              cream: '#fbf7f0',
+              card: '#ffffff',
+              border: '#eae4d9',
+              darkgreen: '#1b4d3e',
+              lightgreen: '#e7f3eb',
+              textgreen: '#1a4f3d',
+              ochre: '#a66718',
+              muted: '#696864',
+              softbadge: '#efece4',
+              taggreen: '#e4f1e8',
+              taggreentext: '#205c45'
+            }
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', '"SF Pro Display"', 'Segoe UI', 'Roboto', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="base-typography">
+    body {
+      background-color: #fbf7f0;
+      color: #1f2421;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
+    }
+    .custom-bullet-list li {
+      position: relative;
+      padding-left: 1.25rem;
+    }
+    .custom-bullet-list li::before {
+      content: "•";
+      position: absolute;
+      left: 0.25rem;
+      top: 0;
+      color: #374151;
+      font-size: 1.15rem;
+      line-height: inherit;
+    }
+  </style>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"><style>.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;display:inline-block;vertical-align:middle;line-height:1;}.clay-card{background:#fbf6f2;box-shadow:8px 12px 24px rgba(50,48,46,0.08),-6px -6px 16px rgba(255,255,255,0.95),inset 2px 2px 4px rgba(255,255,255,0.9),inset -2px -2px 5px rgba(180,168,158,0.18);}.clay-nav{background:#fbf6f2;box-shadow:8px 12px 22px rgba(50,48,46,0.07),-6px -6px 16px rgba(255,255,255,0.95),inset 1.5px 1.5px 3px rgba(255,255,255,0.9),inset -2px -2px 4px rgba(180,168,158,0.15);}.clay-pill-btn{background:#fbf6f2;box-shadow:4px 5px 12px rgba(50,48,46,0.08),-3px -3px 8px rgba(255,255,255,0.95),inset 1.5px 1.5px 3px rgba(255,255,255,0.9),inset -1.5px -1.5px 3px rgba(180,168,158,0.2);}.clay-pill-btn:active{box-shadow:inset 2px 2px 5px rgba(180,168,158,0.25),inset -1px -1px 3px rgba(255,255,255,0.8);transform:scale(0.97);}.clay-nav-active{background:linear-gradient(145deg,#235d4d,#174538);box-shadow:5px 6px 14px rgba(27,77,62,0.32),-2px -2px 6px rgba(255,255,255,0.6),inset 1.5px 1.5px 3px rgba(255,255,255,0.35),inset -2px -2px 4px rgba(0,0,0,0.3);}.clay-badge{background:#ede6dd;box-shadow:inset 1.5px 1.5px 3px rgba(180,168,158,0.25),inset -1.5px -1.5px 3px rgba(255,255,255,0.8);}.clay-badge-green{background:#d8ebe1;box-shadow:inset 1.5px 1.5px 3px rgba(27,77,62,0.15),inset -1.5px -1.5px 3px rgba(255,255,255,0.85);}.clay-dot-active{background:linear-gradient(145deg,#245e4e,#174639);box-shadow:2px 2px 4px rgba(27,77,62,0.25),inset 1px 1px 2px rgba(255,255,255,0.4);}.clay-dot-ochre{background:linear-gradient(145deg,#b37016,#8f550c);box-shadow:2px 2px 4px rgba(143,85,12,0.25),inset 1px 1px 2px rgba(255,255,255,0.4);}.clay-dot-inactive{background:#e7e0d6;box-shadow:inset 1px 1px 2px rgba(180,168,158,0.28),inset -1px -1px 2px rgba(255,255,255,0.8);}.clay-icon-pod{background:linear-gradient(145deg,#f4ede6,#ffffff);box-shadow:3px 4px 8px rgba(50,48,46,0.06),-2px -2px 6px rgba(255,255,255,0.9),inset 1px 1px 2px rgba(255,255,255,0.9);}</style></head>
+<body class="bg-[#f5eee7] font-['Space_Grotesk'] text-[#1d1b19] min-h-screen pb-16 antialiased selection:bg-[#d1e7dd] selection:text-[#003622]">
+<!-- Mobile Screen Container -->
+<div class="max-w-[430px] mx-auto min-h-screen px-4 pt-2"><!-- Top Floating Segmented Navigation Bar -->
+<header class="w-full pt-2 pb-3">
+  <nav class="clay-nav rounded-full flex items-center justify-between px-2.5 py-1.5 transition-all">
+    <!-- Weather Tab -->
+    
+    <!-- Editor Tab -->
+    
+    <!-- Active Dominant 'Pal' Tab with tactile clay volume -->
+    <a class="flex flex-col items-center justify-center clay-nav-active text-white rounded-full px-5 py-2 -my-0.5 transition-transform duration-100" href="#pal">
+      <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: &quot;FILL&quot; 1;">psychiatry</span>
+      <span class="text-[11px] font-bold tracking-tight mt-0.5">Pal</span>
+    </a>
+    <!-- Records Tab -->
+    <a class="flex flex-col items-center justify-center text-[#404945] hover:text-[#003629] transition-all duration-150 active:scale-95 px-2.5 py-1 rounded-full" href="#records">
+      <span class="material-symbols-outlined text-[20px]">format_list_bulleted</span>
+      <span class="text-[11px] font-medium tracking-tight mt-0.5">Records</span>
+    </a>
+    <!-- Settings Tab -->
+    <a class="flex flex-col items-center justify-center text-[#404945] hover:text-[#003629] transition-all duration-150 active:scale-95 px-2.5 py-1 rounded-full" href="#settings">
+      <span class="material-symbols-outlined text-[20px]">settings</span>
+      <span class="text-[11px] font-medium tracking-tight mt-0.5">Settings</span>
+    </a>
+  </nav>
+</header>
+
+<!-- Back Button and Title -->
+<nav aria-label="Breadcrumb" class="flex items-center gap-3.5 my-2.5 px-0.5">
+  <button class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full clay-pill-btn text-[#1b4d3e] text-sm font-bold tracking-tight active:scale-95 transition-all" type="button">
+    <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+    <span>Back</span>
+  </button>
+  <h1 class="text-[20px] font-bold tracking-tight text-[#1d1b19]">Rotation detail</h1>
+</nav>
+
+<!-- Option Title Bar & Listen Pill -->
+<section class="mt-3 mb-4 flex items-start justify-between gap-3 px-1" data-purpose="rotation-header">
+  <div>
+    
+    <h2 class="text-[22px] font-bold leading-tight text-[#1d1b19] tracking-tight">Suggested → Chili</h2>
+  </div>
+  <button class="shrink-0 mt-1 flex items-center gap-1.5 px-4 py-2 clay-pill-btn text-[#1b4d3e] text-xs font-bold rounded-full active:scale-95 transition-all" type="button">
+    <span class="material-symbols-outlined text-[16px]">volume_up</span>
+    <span>Listen</span>
+  </button>
+</section>
+
+<!-- Content Cards in Claymorphism Style -->
+<main class="space-y-4">
+  <!-- Card 1: Climate and water fit -->
+  <article class="clay-card rounded-[28px] p-5" data-purpose="climate-water-fit">
+    <div class="flex items-center gap-2.5 mb-3">
+      <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#1b4d3e]">
+        <span class="material-symbols-outlined text-[18px]">water_drop</span>
+      </div>
+      <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Climate and water fit</h3>
+    </div>
+    <!-- Rating Metric -->
+    <div class="flex items-center gap-2.5 mb-3.5 px-0.5">
+      <span class="text-sm font-semibold text-[#1d1b19]">Water fit</span>
+      <div class="flex items-center gap-1.5">
+        <span class="w-5 h-2.5 rounded-full clay-dot-active"></span>
+        <span class="w-5 h-2.5 rounded-full clay-dot-active"></span>
+        <span class="w-5 h-2.5 rounded-full clay-dot-active"></span>
+      </div>
+      <span class="text-sm font-bold text-[#1b4d3e] ml-1 px-2.5 py-0.5 rounded-full clay-badge-green text-xs">Good</span>
+    </div>
+    
+  </article>
+
+  <!-- Card 2: Soil and rotation benefit -->
+  <article class="clay-card rounded-[28px] p-5" data-purpose="soil-rotation-benefit">
+    <div class="flex items-center gap-2.5 mb-3">
+      <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#1b4d3e]">
+        <span class="material-symbols-outlined text-[18px]">psychiatry</span>
+      </div>
+      <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Soil and rotation benefit</h3>
+    </div>
+    <!-- Rating Metric -->
+    <div class="flex items-center gap-2.5 mb-3.5 px-0.5">
+      <span class="text-sm font-semibold text-[#1d1b19]">Soil benefit</span>
+      <div class="flex items-center gap-1.5">
+        <span class="w-5 h-2.5 rounded-full clay-dot-active"></span>
+        <span class="w-5 h-2.5 rounded-full clay-dot-active"></span>
+        <span class="w-5 h-2.5 rounded-full clay-dot-inactive"></span>
+      </div>
+      <span class="text-sm font-bold text-[#1b4d3e] ml-1 px-2.5 py-0.5 rounded-full clay-badge-green text-xs">Medium</span>
+    </div>
+    
+  </article>
+
+  <!-- Card 3: Risks -->
+  <article class="clay-card rounded-[28px] p-5" data-purpose="risks">
+    <div class="flex items-center gap-2.5 mb-3">
+      <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#9a5e12]">
+        <span class="material-symbols-outlined text-[18px]">warning</span>
+      </div>
+      <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Risks</h3>
+    </div>
+    <!-- Rating Metric -->
+    <div class="flex items-center gap-2.5 mb-3.5 px-0.5">
+      <span class="text-sm font-semibold text-[#1d1b19]">Risk</span>
+      <div class="flex items-center gap-1.5">
+        <span class="w-5 h-2.5 rounded-full clay-dot-ochre"></span>
+        <span class="w-5 h-2.5 rounded-full clay-dot-inactive"></span>
+        <span class="w-5 h-2.5 rounded-full clay-dot-inactive"></span>
+      </div>
+      <span class="text-sm font-bold text-[#9a5e12] ml-1 px-2.5 py-0.5 rounded-full clay-badge text-xs">Lower</span>
+    </div>
+    
+  </article>
+
+  <!-- Card 4: Missing information -->
+  <article class="clay-card rounded-[28px] p-5" data-purpose="missing-information">
+    <div class="flex items-center gap-2.5 mb-3.5">
+      <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#404945]">
+        <span class="material-symbols-outlined text-[18px]">help</span>
+      </div>
+      <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Missing information</h3>
+    </div>
+    <div class="space-y-3 mb-3.5 text-[14px]">
+      <div class="flex items-center justify-between p-2 rounded-xl bg-[#f5eee7]/60">
+        <span class="text-[#1d1b19] font-medium">Soil pH</span>
+        <span class="px-3 py-1 clay-badge text-[#404945] rounded-full text-xs font-bold">Unknown</span>
+      </div>
+      <div class="flex items-center justify-between p-2 rounded-xl bg-[#f5eee7]/60">
+        <span class="text-[#1d1b19] font-medium">Water in dry weeks</span>
+        <span class="px-3 py-1 clay-badge text-[#404945] rounded-full text-xs font-bold">Unknown</span>
+      </div>
+      <div class="flex items-center justify-between p-2 rounded-xl bg-[#f5eee7]/60">
+        <span class="text-[#1d1b19] font-medium">Okra market price</span>
+        <span class="px-3 py-1 clay-badge text-[#404945] rounded-full text-xs font-bold">Not checked</span>
+      </div>
+    </div>
+    
+  </article>
+
+  <!-- Card 5: Before you decide -->
+  
+
+  <!-- Card 6: Why this result? (Accordion) -->
+  
+</main></div>
+
+
+
+
+
+
+
+
+
+
+
+
+</body></html>

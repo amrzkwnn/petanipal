@@ -1,0 +1,215 @@
+{
+  "version": "1.1.0",
+  "questions": [
+    {
+      "question_id": "crop_history",
+      "target_field": "crop_history",
+      "prompts": {
+        "en": "Last season, what did you plant on this land?",
+        "ms": "Musim lepas, tanam apa kat kebun ni?"
+      },
+      "confirmation_templates": {
+        "en": "I heard you planted {label} last season. Is that right?",
+        "ms": "Saya dengar musim lepas tanam {label}. Betul ke?"
+      },
+      "answer_type": "crop_name",
+      "allowed_values": [],
+      "ask_when": ["always_essential"],
+      "priority": 1
+    },
+    {
+      "question_id": "irrigation_availability",
+      "target_field": "irrigation_availability",
+      "prompts": {
+        "en": "When there is no rain, do you still have water to water this field?",
+        "ms": "Kalau tak hujan, ada air lagi tak untuk siram kebun ni?"
+      },
+      "confirmation_templates": {
+        "en": "I heard that when there is no rain, water is: {label}. Is that right?",
+        "ms": "Saya dengar kalau tak hujan, air untuk siram {label}. Betul ke?"
+      },
+      "answer_type": "single_choice",
+      "allowed_values": [
+        { "value": "always", "labels": { "en": "Always have water", "ms": "Sentiasa ada" } },
+        { "value": "sometimes", "labels": { "en": "Sometimes only", "ms": "Kadang-kadang ada" } },
+        { "value": "no", "labels": { "en": "No water", "ms": "Tak ada" } },
+        { "value": "unknown", "labels": { "en": "Not sure", "ms": "Tak pasti" } }
+      ],
+      "ask_when": ["always_essential"],
+      "priority": 2
+    },
+    {
+      "question_id": "farmer_priority",
+      "target_field": "priorities",
+      "prompts": {
+        "en": "For your next crop, what matters most to you: saving water, keeping the soil healthy, earning more, or avoiding big losses?",
+        "ms": "Untuk pusingan ni, apa yang paling penting: nak jimat air, bagi tanah subur balik, cari untung lebih, atau nak elak rugi?"
+      },
+      "confirmation_templates": {
+        "en": "So your main goal right now is: {label}. Is that right?",
+        "ms": "Jadi yang paling penting sekarang ialah {label}. Betul ke?"
+      },
+      "answer_type": "single_choice",
+      "allowed_values": [
+        { "value": "water", "labels": { "en": "Save water", "ms": "Jimat air" } },
+        { "value": "soil_health", "labels": { "en": "Keep soil healthy", "ms": "Bagi tanah subur" } },
+        { "value": "income", "labels": { "en": "Earn more", "ms": "Untung lebih" } },
+        { "value": "risk_reduction", "labels": { "en": "Avoid big losses / lower risk", "ms": "Elak rugi / kurang risiko" } }
+      ],
+      "ask_when": ["always_essential"],
+      "priority": 3
+    },
+    {
+      "question_id": "flood_last_season",
+      "target_field": "soil.flooded_last_season",
+      "prompts": {
+        "en": "Did this field flood at all last season?",
+        "ms": "Musim lepas, kebun ni pernah naik air atau banjir tak?"
+      },
+      "confirmation_templates": {
+        "en": "I heard regarding flooding last season: {label}. Is that right?",
+        "ms": "Saya dengar musim lepas kebun ni {label}. Betul ke?"
+      },
+      "answer_type": "single_choice",
+      "allowed_values": [
+        { "value": "yes", "labels": { "en": "Yes, it flooded", "ms": "Ya, pernah banjir" } },
+        { "value": "no", "labels": { "en": "No, did not flood", "ms": "Tak pernah" } },
+        { "value": "unknown", "labels": { "en": "Not sure", "ms": "Tak pasti" } }
+      ],
+      "ask_when": ["always_essential"],
+      "priority": 4
+    },
+    {
+      "question_id": "waterlogging_duration",
+      "target_field": "soil.waterlogging_duration",
+      "prompts": {
+        "en": "After heavy rain, how long does water stay sitting on the field?",
+        "ms": "Lepas hujan lebat, air bertakung lama mana kat kebun?"
+      },
+      "confirmation_templates": {
+        "en": "I heard water stays on the field for: {label}. Is that right?",
+        "ms": "Saya dengar lepas hujan lebat, air bertakung {label}. Betul ke?"
+      },
+      "answer_type": "single_choice",
+      "allowed_values": [
+        { "value": "same_day", "labels": { "en": "Goes down the same day", "ms": "Hari tu jugak surut" } },
+        { "value": "1_to_2_days", "labels": { "en": "Stays 1 or 2 days", "ms": "Sehari dua baru surut" } },
+        { "value": "over_2_days", "labels": { "en": "Stays more than 2 days", "ms": "Lebih dua hari baru surut" } },
+        { "value": "unknown", "labels": { "en": "Not sure", "ms": "Tak pasti" } }
+      ],
+      "ask_when": [
+        "geotanih_drainage_limitation",
+        "crop_flood_sensitive",
+        "farmer_reported_flooding"
+      ],
+      "priority": 5
+    },
+    {
+      "question_id": "soil_feel",
+      "target_field": "soil.texture_feel",
+      "prompts": {
+        "en": "When the soil is wet, how does it feel in your hand — sticky like clay, loose and sandy, or in-between?",
+        "ms": "Bila tanah tu basah, pegang rasa macam mana — melekit macam tanah liat, berpasir, atau sedang-sedang?"
+      },
+      "confirmation_templates": {
+        "en": "I heard the wet soil feels: {label}. Is that right?",
+        "ms": "Saya dengar tanah ni bila basah rasa {label}. Betul ke?"
+      },
+      "answer_type": "single_choice",
+      "allowed_values": [
+        { "value": "sticky", "labels": { "en": "Sticky (clay)", "ms": "Melekit (tanah liat)" } },
+        { "value": "sandy", "labels": { "en": "Loose and sandy", "ms": "Berpasir" } },
+        { "value": "in_between", "labels": { "en": "In-between", "ms": "Sedang-sedang" } },
+        { "value": "unknown", "labels": { "en": "Not sure", "ms": "Tak pasti" } }
+      ],
+      "ask_when": ["geotanih_texture_limitation", "helpful_context"],
+      "priority": 6
+    },
+    {
+      "question_id": "soil_test",
+      "target_field": "soil.soil_test_status",
+      "prompts": {
+        "en": "Have you had the soil tested recently?",
+        "ms": "Pernah buat ujian tanah tak baru-baru ni?"
+      },
+      "confirmation_templates": {
+        "en": "I heard about your soil test: {label}. Is that right?",
+        "ms": "Saya dengar pasal ujian tanah: {label}. Betul ke?"
+      },
+      "answer_type": "single_choice",
+      "allowed_values": [
+        { "value": "yes_known", "labels": { "en": "Yes, and I know the result", "ms": "Ya, ada keputusan" } },
+        { "value": "yes_unknown_result", "labels": { "en": "Yes, but I don't remember the result", "ms": "Pernah buat, tapi tak ingat keputusan" } },
+        { "value": "no_test", "labels": { "en": "No test done", "ms": "Belum pernah buat" } }
+      ],
+      "ask_when": ["helpful_context"],
+      "priority": 7
+    },
+    {
+      "question_id": "field_problems",
+      "target_field": "field_observations",
+      "prompts": {
+        "en": "What gives you the most trouble in this field: bugs, plant disease, weeds, too much water, or not enough water?",
+        "ms": "Selalu kat kebun ni, apa masalah paling kerap jadi: serangga perosak, penyakit pokok, rumput banyak, terlebih air, atau tak cukup air?"
+      },
+      "confirmation_templates": {
+        "en": "I heard the biggest trouble in the field is: {label}. Is that right?",
+        "ms": "Saya dengar masalah paling kerap kat kebun ialah {label}. Betul ke?"
+      },
+      "answer_type": "free_text",
+      "allowed_values": [
+        { "value": "insects", "labels": { "en": "Bugs / insects", "ms": "Serangga / ulat" } },
+        { "value": "disease", "labels": { "en": "Plant disease", "ms": "Penyakit pokok" } },
+        { "value": "weeds", "labels": { "en": "Weeds", "ms": "Rumput / lalang" } },
+        { "value": "too_much_water", "labels": { "en": "Too much water", "ms": "Terlebih air" } },
+        { "value": "too_little_water", "labels": { "en": "Not enough water", "ms": "Tak cukup air" } },
+        { "value": "unknown", "labels": { "en": "Not sure", "ms": "Tak pasti" } }
+      ],
+      "ask_when": ["helpful_context"],
+      "priority": 8
+    },
+    {
+      "question_id": "trouble_spot",
+      "target_field": "soil.trouble_spot",
+      "prompts": {
+        "en": "Which part of the field usually gives you the most headache?",
+        "ms": "Bahagian mana kat kebun ni yang selalu buat hal?"
+      },
+      "confirmation_templates": {
+        "en": "I heard the problem spot is: {label}. Is that right?",
+        "ms": "Saya dengar bahagian yang selalu bermasalah ialah {label}. Betul ke?"
+      },
+      "answer_type": "single_choice",
+      "allowed_values": [
+        { "value": "low_flooding_area", "labels": { "en": "Low / flooding corner", "ms": "Tempat rendah / selalu naik air" } },
+        { "value": "dry_area", "labels": { "en": "Dry spot", "ms": "Tempat kering" } },
+        { "value": "slope", "labels": { "en": "Sloped area", "ms": "Kawasan cerun / bukit" } },
+        { "value": "no_problem", "labels": { "en": "All okay, no problem spot", "ms": "Semua okay je" } },
+        { "value": "unknown", "labels": { "en": "Not sure", "ms": "Tak pasti" } }
+      ],
+      "ask_when": ["geotanih_slope_limitation", "farmer_reported_flooding"],
+      "priority": 9
+    },
+    {
+      "question_id": "labour_availability",
+      "target_field": "labour_availability",
+      "prompts": {
+        "en": "When it's time to plant and harvest, will you have enough hands to help?",
+        "ms": "Nanti masa nak tanam dengan nak tuai, cukup orang tak nak buat kerja?"
+      },
+      "confirmation_templates": {
+        "en": "I heard about your helpers/workers: {label}. Is that right?",
+        "ms": "Saya dengar pasal orang nak kerja kat kebun: {label}. Betul ke?"
+      },
+      "answer_type": "single_choice",
+      "allowed_values": [
+        { "value": "yes", "labels": { "en": "Yes, enough hands", "ms": "Cukup" } },
+        { "value": "maybe", "labels": { "en": "Maybe", "ms": "Mungkin cukup" } },
+        { "value": "no", "labels": { "en": "Not enough", "ms": "Tak cukup" } },
+        { "value": "unknown", "labels": { "en": "Not sure", "ms": "Tak pasti" } }
+      ],
+      "ask_when": ["helpful_context"],
+      "priority": 10
+    }
+  ]
+}

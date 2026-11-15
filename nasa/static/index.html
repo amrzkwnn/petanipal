@@ -1,0 +1,2388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+  <title>PetaniPal — AgroPal Voice Intelligence &amp; Rotation</title>
+  <link href="https://fonts.googleapis.com" rel="preconnect"/>
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-surface-variant": "#404945",
+            "tertiary": "#003622",
+            "outline-variant": "#c0c9c3",
+            "on-primary": "#ffffff",
+            "inverse-on-surface": "#f6f0ec",
+            "surface-container-highest": "#e7e1dd",
+            "background": "#f5eee7",
+            "on-secondary-container": "#556961",
+            "on-background": "#1d1b19",
+            "surface-container-low": "#f8f2ee",
+            "secondary-container": "#d1e7dd",
+            "primary-fixed": "#baeed9",
+            "on-secondary-fixed-variant": "#374b44",
+            "secondary-fixed-dim": "#b6cbc2",
+            "on-tertiary-fixed-variant": "#005235",
+            "tertiary-container": "#004f33",
+            "surface-variant": "#e7e1dd",
+            "surface-dim": "#dfd9d5",
+            "error": "#ba1a1a",
+            "surface-tint": "#376757",
+            "surface-container": "#f1eae4",
+            "primary-container": "#1b4d3e",
+            "error-container": "#ffdad6",
+            "surface": "#fbf6f2",
+            "primary-fixed-dim": "#9ed1bd",
+            "on-error-container": "#93000a",
+            "inverse-primary": "#9ed1bd",
+            "on-error": "#ffffff",
+            "surface-container-high": "#ede7e3",
+            "primary": "#003629",
+            "on-tertiary": "#ffffff",
+            "on-tertiary-fixed": "#002113",
+            "tertiary-fixed": "#92f7c3",
+            "on-tertiary-container": "#60c595",
+            "on-primary-fixed": "#002117",
+            "on-primary-container": "#8abda9",
+            "secondary": "#4f635b",
+            "secondary-fixed": "#d1e7dd",
+            "surface-container-lowest": "#ffffff",
+            "on-secondary-fixed": "#0c1f19",
+            "on-primary-fixed-variant": "#1d4f40",
+            "inverse-surface": "#32302e",
+            "on-surface": "#1d1b19",
+            "outline": "#707974",
+            "on-secondary": "#ffffff",
+            "surface-bright": "#fef8f4",
+            "tertiary-fixed-dim": "#75daa8"
+          },
+          borderRadius: {
+            "DEFAULT": "1rem",
+            "lg": "2rem",
+            "xl": "3rem",
+            "full": "9999px"
+          },
+          spacing: {
+            "gutter": "1rem",
+            "space-xl": "2.25rem",
+            "space-xs": "0.375rem",
+            "space-sm": "0.75rem",
+            "margin": "1rem",
+            "space-md": "1rem",
+            "space-lg": "1.5rem"
+          },
+          fontFamily: {
+            "headline-lg": ["Space Grotesk", "sans-serif"],
+            "body-lg": ["Space Grotesk", "sans-serif"],
+            "headline-md": ["Space Grotesk", "sans-serif"],
+            "headline-sm": ["Space Grotesk", "sans-serif"],
+            "display-lg": ["Space Grotesk", "sans-serif"],
+            "label-sm": ["Space Grotesk", "sans-serif"],
+            "label-lg": ["Space Grotesk", "sans-serif"],
+            "body-sm": ["Space Grotesk", "sans-serif"],
+            "body-md": ["Space Grotesk", "sans-serif"],
+            "label-md": ["Space Grotesk", "sans-serif"]
+          },
+          fontSize: {
+            "headline-lg": ["26px", { "lineHeight": "34px", "fontWeight": "700" }],
+            "body-lg": ["18px", { "lineHeight": "26px", "fontWeight": "500" }],
+            "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+            "headline-sm": ["17px", { "lineHeight": "24px", "fontWeight": "600" }],
+            "display-lg": ["36px", { "lineHeight": "44px", "fontWeight": "700" }],
+            "label-sm": ["10px", { "lineHeight": "14px", "fontWeight": "700" }],
+            "label-lg": ["15px", { "lineHeight": "20px", "fontWeight": "600" }],
+            "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "body-md": ["15px", { "lineHeight": "22px", "fontWeight": "400" }],
+            "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "700" }]
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    html, body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      padding: 0;
+      overscroll-behavior-y: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: 'Space Grotesk', sans-serif;
+    }
+    ::-webkit-scrollbar { display: none; }
+
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+
+    /* Screen 01: Full-Bleed YouTube Video Grounding */
+    .video-background-wrapper {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100vw;
+      height: 100vh;
+      min-width: 177.77vh;
+      min-height: 56.25vw;
+      transform: translate(-50%, -50%) scale(1.15);
+      pointer-events: none;
+    }
+
+    /* Claymorphism tactile utility classes from Stitch 02, 03, 04 */
+    .clay-card {
+      background-color: #fbf6f2;
+      box-shadow:
+        10px 14px 28px rgba(50, 48, 46, 0.08),
+        -8px -8px 20px rgba(255, 255, 255, 0.95),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.9),
+        inset -3px -3px 6px rgba(180, 168, 158, 0.18);
+    }
+
+    .clay-nav {
+      background-color: #fbf6f2;
+      box-shadow:
+        8px 12px 22px rgba(50, 48, 46, 0.07),
+        -6px -6px 16px rgba(255, 255, 255, 0.95),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.9),
+        inset -2px -2px 4px rgba(180, 168, 158, 0.15);
+    }
+
+    .clay-pill-btn {
+      background-color: #fbf6f2;
+      box-shadow:
+        5px 6px 14px rgba(50, 48, 46, 0.08),
+        -4px -4px 10px rgba(255, 255, 255, 0.95),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.9),
+        inset -1.5px -1.5px 3px rgba(180, 168, 158, 0.2);
+    }
+
+    .clay-pill-btn:active {
+      box-shadow:
+        inset 3px 3px 6px rgba(180, 168, 158, 0.25),
+        inset -2px -2px 4px rgba(255, 255, 255, 0.8);
+      transform: scale(0.97);
+    }
+
+    .clay-green-btn {
+      background: linear-gradient(145deg, #225a4a, #164336);
+      box-shadow:
+        6px 8px 18px rgba(27, 77, 62, 0.35),
+        -3px -3px 8px rgba(255, 255, 255, 0.5),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.35),
+        inset -3px -3px 6px rgba(0, 0, 0, 0.28);
+    }
+
+    .clay-green-btn:active {
+      box-shadow:
+        inset 3px 3px 7px rgba(0, 0, 0, 0.4),
+        inset -2px -2px 4px rgba(255, 255, 255, 0.2);
+      transform: scale(0.97);
+    }
+
+    .clay-nav-active {
+      background: linear-gradient(145deg, #235d4d, #174538);
+      box-shadow:
+        5px 6px 14px rgba(27, 77, 62, 0.32),
+        -2px -2px 6px rgba(255, 255, 255, 0.6),
+        inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.35),
+        inset -2px -2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .clay-halo {
+      background: #d4ebd8;
+      box-shadow:
+        inset 6px 8px 16px rgba(138, 189, 169, 0.4),
+        inset -6px -6px 14px rgba(255, 255, 255, 0.8),
+        6px 8px 20px rgba(50, 48, 46, 0.06);
+      transition: all 0.35s ease;
+    }
+
+    .clay-halo.active-pulse {
+      background: #c3e9cb;
+      box-shadow:
+        0 0 0 10px rgba(117, 218, 168, 0.28),
+        0 0 24px rgba(52, 211, 153, 0.4),
+        inset 6px 8px 16px rgba(138, 189, 169, 0.5),
+        inset -6px -6px 14px rgba(255, 255, 255, 0.9);
+      animation: pulseAura 1.4s infinite ease-in-out;
+    }
+
+    @keyframes pulseAura {
+      0%, 100% {
+        box-shadow:
+          0 0 0 8px rgba(117, 218, 168, 0.25),
+          0 0 20px rgba(52, 211, 153, 0.35),
+          inset 6px 8px 16px rgba(138, 189, 169, 0.5),
+          inset -6px -6px 14px rgba(255, 255, 255, 0.9);
+      }
+      50% {
+        box-shadow:
+          0 0 0 16px rgba(117, 218, 168, 0.45),
+          0 0 32px rgba(52, 211, 153, 0.6),
+          inset 6px 8px 16px rgba(138, 189, 169, 0.5),
+          inset -6px -6px 14px rgba(255, 255, 255, 0.9);
+      }
+    }
+
+    .clay-circle-btn {
+      background-color: #fbf6f2;
+      box-shadow:
+        6px 8px 16px rgba(50, 48, 46, 0.1),
+        -5px -5px 12px rgba(255, 255, 255, 0.95),
+        inset 2px 2px 4px rgba(255, 255, 255, 0.9),
+        inset -2px -2px 4px rgba(180, 168, 158, 0.2);
+    }
+
+    /* Interactive Kedah State & District Selector Shapes */
+    .kedah-district-shape {
+      fill: #d8ebe0;
+      stroke: #fbf6f2;
+      stroke-width: 2.5;
+      stroke-linejoin: round;
+      cursor: pointer;
+      transition: fill 0.18s ease, transform 0.18s ease, filter 0.18s ease;
+    }
+    .kedah-district-shape:hover {
+      fill: #9ed1bd;
+      filter: drop-shadow(0 3px 6px rgba(27, 77, 62, 0.22));
+    }
+    .kedah-district-shape.active {
+      fill: #1b4d3e;
+      stroke: #92f7c3;
+      stroke-width: 2.5;
+      filter: drop-shadow(0 4px 10px rgba(27, 77, 62, 0.35));
+    }
+    .kedah-district-label {
+      fill: #1b4d3e;
+      font-size: 9px;
+      font-weight: 700;
+      pointer-events: none;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+    .kedah-district-label.active {
+      fill: #ffffff;
+    }
+
+    /* 3D Earth Globe Clay Texture & Continuous Seamless Spin */
+    .earth-globe {
+      background: radial-gradient(circle at 30% 25%, #2574a9 0%, #175482 32%, #0e375c 68%, #09243d 100%);
+      box-shadow:
+        10px 16px 30px rgba(9, 36, 61, 0.46),
+        -5px -5px 14px rgba(255, 255, 255, 0.7),
+        inset 4px 4px 12px rgba(255, 255, 255, 0.45),
+        inset -8px -10px 20px rgba(4, 15, 26, 0.85);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .earth-globe.is-pressing {
+      transform: scale(0.96);
+      box-shadow:
+        6px 8px 18px rgba(9, 36, 61, 0.42),
+        inset 6px 6px 14px rgba(0, 0, 0, 0.45),
+        inset -3px -3px 8px rgba(255, 255, 255, 0.35);
+    }
+
+    .earth-spin-layer {
+      width: 200%;
+      height: 100%;
+      display: flex;
+      will-change: transform;
+      animation: spinEarth 10s linear infinite;
+      animation-play-state: paused;
+    }
+
+    .earth-clouds-layer {
+      width: 200%;
+      height: 100%;
+      display: flex;
+      will-change: transform;
+      animation: spinEarth 7s linear infinite;
+      animation-play-state: paused;
+    }
+
+    @keyframes spinEarth {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .wave-bar {
+      width: 3px;
+      height: 8px;
+      background-color: #ffffff;
+      border-radius: 9999px;
+      margin: 0 1.5px;
+      opacity: 0.95;
+      animation: waveDance 0.8s ease-in-out infinite alternate;
+    }
+    .wave-bar:nth-child(1) { animation-delay: 0.1s; height: 10px; }
+    .wave-bar:nth-child(2) { animation-delay: 0.3s; height: 16px; }
+    .wave-bar:nth-child(3) { animation-delay: 0.5s; height: 22px; }
+    .wave-bar:nth-child(4) { animation-delay: 0.2s; height: 14px; }
+    .wave-bar:nth-child(5) { animation-delay: 0.4s; height: 8px; }
+
+    @keyframes waveDance {
+      0% { transform: scaleY(0.4); }
+      100% { transform: scaleY(1.4); }
+    }
+
+    /* Screen 04 Clay Badges & Dots */
+    .clay-badge {
+      background: #ede6dd;
+      box-shadow: inset 1.5px 1.5px 3px rgba(180,168,158,0.25), inset -1.5px -1.5px 3px rgba(255,255,255,0.8);
+    }
+    .clay-badge-green {
+      background: #d8ebe1;
+      box-shadow: inset 1.5px 1.5px 3px rgba(27,77,62,0.15), inset -1.5px -1.5px 3px rgba(255,255,255,0.85);
+    }
+    .clay-dot-active {
+      background: linear-gradient(145deg, #245e4e, #174639);
+      box-shadow: 2px 2px 4px rgba(27,77,62,0.25), inset 1px 1px 2px rgba(255,255,255,0.4);
+    }
+    .clay-dot-ochre {
+      background: linear-gradient(145deg, #b37016, #8f550c);
+      box-shadow: 2px 2px 4px rgba(143,85,12,0.25), inset 1px 1px 2px rgba(255,255,255,0.4);
+    }
+    .clay-dot-inactive {
+      background: #e7e0d6;
+      box-shadow: inset 1px 1px 2px rgba(180,168,158,0.28), inset -1px -1px 2px rgba(255,255,255,0.8);
+    }
+    .clay-icon-pod {
+      background: linear-gradient(145deg, #f4ede6, #ffffff);
+      box-shadow: 3px 4px 8px rgba(50,48,46,0.06), -2px -2px 6px rgba(255,255,255,0.9), inset 1px 1px 2px rgba(255,255,255,0.9);
+    }
+    .custom-bullet-list li {
+      position: relative;
+      padding-left: 1.25rem;
+    }
+    .custom-bullet-list li::before {
+      content: "•";
+      position: absolute;
+      left: 0.25rem;
+      top: 0;
+      color: #374151;
+      font-size: 1.15rem;
+      line-height: inherit;
+    }
+  </style>
+</head>
+<body class="bg-background font-body-md text-on-surface min-h-screen flex flex-col items-center justify-start selection:bg-secondary-container selection:text-tertiary w-full">
+
+  <!-- ======================================================================= -->
+  <!-- STITCH SCREEN 01: FarmPal - YouTube Video Entrance & Login              -->
+  <!-- ======================================================================= -->
+  <section id="screen-entrance" class="w-full min-h-screen bg-[#131316] text-[#e4e1e6] flex flex-col relative overflow-hidden select-none">
+    <!-- Full-Bleed YouTube Cinematic Video Grounding -->
+    <div class="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
+      <div class="video-background-wrapper">
+        <iframe
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen=""
+          class="w-full h-full pointer-events-none border-0"
+          id="ytVideoIframe"
+          src="https://www.youtube-nocookie.com/embed/85kTHwJ1Ju8?autoplay=1&amp;mute=1&amp;controls=0&amp;loop=1&amp;playlist=85kTHwJ1Ju8&amp;playsinline=1&amp;enablejsapi=1&amp;rel=0&amp;showinfo=0">
+        </iframe>
+      </div>
+      <!-- Dynamic Obsidian Ethereal Darkening Veil -->
+      <div class="absolute inset-0 transition-all duration-1000 ease-out" id="videoVeil" style="background: linear-gradient(rgba(19, 19, 22, 0.12) 0%, rgba(19, 19, 22, 0.05) 50%, rgba(19, 19, 22, 0.18) 100%); backdrop-filter: blur(0px);"></div>
+      <!-- Static Vignette Shadow Gradient for Depth & Readability -->
+      <div class="absolute inset-0 pointer-events-none" style="background: linear-gradient(rgba(19, 19, 22, 0.15) 0%, transparent 35%, transparent 75%, rgba(19, 19, 22, 0.25) 100%);"></div>
+      <div class="absolute top-0 left-0 right-0 w-full h-36 pointer-events-none z-20" style="background: linear-gradient(rgba(19, 19, 22, 0.75) 0%, rgba(19, 19, 22, 0.35) 45%, rgba(19, 19, 22, 0) 100%);"></div>
+    </div>
+
+    <aside aria-label="System status &amp; controls" class="relative z-30 w-full flex items-center justify-between px-5 pt-4 pb-2"></aside>
+
+    <!-- Content Flow Container -->
+    <div class="relative z-20 w-full max-w-[440px] mx-auto min-h-[740px] flex-1 flex flex-col justify-between px-5 py-6">
+      <!-- Brand Title + Modern Ultra-Transparent Liquid Glass Login Surface -->
+      <div class="w-full flex-1 flex flex-col transition-all duration-700 opacity-100 translate-y-0 justify-between gap-6" id="mainEntranceGroup">
+        <!-- Brand Emblem & Headline -->
+        <header class="w-full flex flex-col items-center text-center pt-16 md:pt-20 pb-4 transition-all duration-700 opacity-100 translate-y-0" id="brandTitleBlock">
+          <h1 class="text-white flex items-center justify-center font-bold tracking-tight" style="font-family: 'Space Grotesk', sans-serif; font-size: 3rem; line-height: 1.15; letter-spacing: -0.03em; text-shadow: rgba(0, 0, 0, 0.85) 0px 4px 24px, rgba(0, 0, 0, 0.9) 0px 2px 6px;">
+            <span>PetaniPal</span>
+          </h1>
+        </header>
+
+        <!-- Ultra-transparent Liquid Glass Login Surface -->
+        <section aria-label="Account Login" class="w-full backdrop-blur-xl rounded-xl p-5 shadow-2xl transition-all duration-700 flex flex-col gap-4 border border-white/20 opacity-100 translate-y-0" id="loginCardBlock" style="background: linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 100%); backdrop-filter: blur(16px) saturate(200%); border: 1px solid rgba(255, 255, 255, 0.25); box-shadow: rgba(0, 0, 0, 0.3) 0px 20px 50px, rgba(255, 255, 255, 0.3) 0px 1px 1px 0px inset;">
+          <form class="flex flex-col gap-3.5" id="farmLoginForm" onsubmit="event.preventDefault(); handleSignIn();" style="text-shadow: rgba(0, 0, 0, 0.85) 0px 1px 3px;">
+            <!-- Email Input -->
+            <div class="flex flex-col gap-1.5">
+              <label class="text-[11px] font-semibold uppercase tracking-wider text-[#c4c7c9] flex items-center justify-between" for="operatorId">
+                <span>Email</span>
+              </label>
+              <div class="relative flex items-center">
+                <span class="material-symbols-outlined absolute left-3.5 text-[#c4c7c9] text-lg pointer-events-none">badge</span>
+                <input autocomplete="username" class="w-full pl-10 pr-3.5 py-3 rounded-lg text-white text-[14px] placeholder:text-[#8e9193] focus:outline-none transition-colors" id="operatorId" placeholder="pilot.jensen@farmpal.com" style="background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: rgba(0, 0, 0, 0.3) 0px 2px 4px inset; color: rgb(255, 255, 255); text-shadow: rgba(0, 0, 0, 0.7) 0px 1px 2px;" type="text" value="pilot.jensen@farmpal.com"/>
+              </div>
+            </div>
+
+            <!-- Password Input -->
+            <div class="flex flex-col gap-1.5">
+              <div class="flex items-center justify-between">
+                <label class="text-[11px] font-semibold uppercase tracking-wider text-[#c4c7c9]" for="operatorKey">Password</label>
+                <button class="text-[11px] font-semibold text-[#c6c5cf] hover:text-white transition-colors cursor-pointer" type="button">
+                  Forgot password?
+                </button>
+              </div>
+              <div class="relative flex items-center">
+                <span class="material-symbols-outlined absolute left-3.5 text-[#c4c7c9] text-lg pointer-events-none">lock</span>
+                <input autocomplete="current-password" class="w-full pl-10 pr-10 py-3 rounded-lg text-white text-[14px] placeholder:text-[#8e9193] focus:outline-none transition-colors" id="operatorKey" placeholder="Enter password" style="background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: rgba(0, 0, 0, 0.3) 0px 2px 4px inset; color: rgb(255, 255, 255); text-shadow: rgba(0, 0, 0, 0.7) 0px 1px 2px;" type="password" value="••••••••••••"/>
+                <button class="absolute right-3 text-[#c4c7c9] hover:text-white transition-colors cursor-pointer" id="btnTogglePassword" onclick="togglePasswordVisibility()" title="Toggle visibility" type="button">
+                  <span class="material-symbols-outlined text-lg" id="pwdToggleIcon">visibility</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Remember checkbox -->
+            <div class="flex items-center justify-between pt-0.5">
+              <label class="flex items-center gap-2 cursor-pointer select-none">
+                <input checked="" class="w-4 h-4 rounded bg-[#1f1f22] text-white cursor-pointer border-[#444749]" type="checkbox"/>
+                <span class="text-[11px] font-semibold text-[#c4c7c9]">Remember Password</span>
+              </label>
+            </div>
+
+            <p id="loginErrorMsg" class="hidden text-xs text-[#ffb4ab]"></p>
+
+            <!-- Main Luminescent Sign In Button -->
+            <button class="w-full mt-2 py-3.5 px-4 rounded-full font-semibold text-[14px] flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all cursor-pointer" id="btnSignIn" style="background: linear-gradient(rgb(255, 255, 255) 0%, rgb(236, 236, 236) 100%); color: rgb(19, 19, 22); box-shadow: rgba(255, 255, 255, 0.35) 0px 8px 24px -4px, rgba(0, 0, 0, 0.3) 0px 2px 6px, rgb(255, 255, 255) 0px 1px 1px inset;" type="submit">
+              <span>Sign In</span>
+              <span class="material-symbols-outlined text-lg">arrow_forward</span>
+            </button>
+          </form>
+
+          <!-- Secondary Access Methods -->
+          <div class="flex justify-center w-full mt-1">
+            <button onclick="handleSignIn()" class="py-2.5 px-5 rounded-lg text-[#e4e1e6] text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors active:scale-95 cursor-pointer shadow-sm" style="background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: rgba(0, 0, 0, 0.25) 0px 4px 16px; text-shadow: rgba(0, 0, 0, 0.8) 0px 1px 3px;" type="button">
+              <span class="material-symbols-outlined text-base">fingerprint</span>
+              <span>Biometric ID</span>
+            </button>
+          </div>
+        </section>
+
+        <footer class="w-full text-center pt-4 pb-2"></footer>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================= -->
+  <!-- STITCH MAIN CLAYMORPHISM SHELL (Screens 02, 03, 04 + Records/Settings)  -->
+  <!-- ======================================================================= -->
+  <main id="screen-app" class="hidden w-full max-w-[480px] min-h-screen flex flex-col justify-between px-margin relative overflow-hidden mx-auto bg-background pt-6 pb-8">
+
+    <!-- Top Floating Segmented Navigation Bar (Exact from Stitch 02, 03, 04) -->
+    <header class="w-full pb-3 flex pt-2">
+      <nav class="clay-nav rounded-full flex items-center justify-between px-2.5 py-1.5 transition-all mx-auto w-full">
+        <!-- Active Dominant "Pal" Tab with tactile clay volume -->
+        <a id="nav-tab-pal" onclick="switchTopTab('pal'); return false;" class="flex flex-col items-center justify-center clay-nav-active text-on-primary rounded-full px-5 py-2 -my-0.5 transition-transform duration-100 cursor-pointer" href="#pal">
+          <span class="material-symbols-outlined text-[22px]" data-icon="psychiatry" data-weight="fill" style="font-variation-settings: 'FILL' 1;">psychiatry</span>
+          <span class="font-label-sm text-label-sm font-bold tracking-tight mt-0.5">Pal</span>
+        </a>
+        <!-- Records Tab -->
+        <a id="nav-tab-records" onclick="switchTopTab('records'); return false;" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all duration-150 active:scale-95 px-2 py-1 rounded-full cursor-pointer" href="#records">
+          <span class="material-symbols-outlined text-[20px]" data-icon="format_list_bulleted">format_list_bulleted</span>
+          <span class="font-label-sm text-label-sm mt-0.5">Records</span>
+        </a>
+        <!-- Settings Tab -->
+        <a id="nav-tab-settings" onclick="switchTopTab('settings'); return false;" class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all duration-150 active:scale-95 px-2 py-1 rounded-full cursor-pointer" href="#settings">
+          <span class="material-symbols-outlined text-[20px]" data-icon="settings">settings</span>
+          <span class="font-label-sm text-label-sm mt-0.5">Settings</span>
+        </a>
+      </nav>
+    </header>
+
+    <!-- =================================================================== -->
+    <!-- PAL HUB VIEW (Screens 02 & 03 + Shared Spinning Earth Footer)       -->
+    <!-- =================================================================== -->
+    <div id="pal-hub-wrapper" class="flex-1 flex flex-col justify-between w-full">
+
+      <!-- Context Utility Action Pill (Exact from Stitch 02 & 03) -->
+      <div class="w-full flex justify-center px-1 my-2 mx-auto gap-3">
+        <button id="pill-btn-farm" onclick="toggleFarmSelectionCard()" class="inline-flex items-center gap-2 clay-pill-btn text-primary-container rounded-full px-5 py-2.5 font-label-lg text-label-lg transition-transform duration-100 cursor-pointer" type="button">
+          <span class="material-symbols-outlined text-[20px]" id="pill-icon-farm" data-icon="bar_chart">bar_chart</span>
+          <span class="font-bold tracking-tight" id="pill-label-farm">Farm</span>
+        </button>
+        <button id="pill-btn-details" onclick="openRotationDetailView()" class="inline-flex items-center gap-2 clay-pill-btn text-primary-container rounded-full px-5 py-2.5 font-label-lg text-label-lg transition-transform duration-100 active:scale-95 cursor-pointer" type="button">
+          <span class="material-symbols-outlined text-[20px] text-primary-container" data-icon="info">info</span>
+          <span class="font-bold tracking-tight">Details</span>
+        </button>
+      </div>
+
+      <!-- STITCH SCREEN 02: Pal Farm Selection Card ("Your Farms") -->
+      <section id="card-farm-selection" class="hidden clay-card rounded-[32px] p-space-lg flex flex-col gap-4 my-2 w-full mx-auto">
+        <div class="flex items-center justify-between pb-1">
+          <div class="flex flex-col">
+            <div class="flex items-center gap-2">
+              <h2 class="font-headline-md text-headline-md font-bold text-on-surface tracking-tight">Your Farms</h2>
+            </div>
+          </div>
+        </div>
+        <div id="farms-list-container" class="flex flex-col gap-3">
+          <!-- Populated dynamically with Green Valley Plot, Sunrise Hill Farm, Riverbend Fields + API farms -->
+        </div>
+        <button onclick="promptAddNewFarm()" class="w-full h-12 clay-pill-btn text-primary-container font-label-lg text-label-lg rounded-full flex items-center justify-center gap-2 active:scale-95 transition-transform mt-1 cursor-pointer" type="button">
+          <span class="material-symbols-outlined text-[20px] text-primary" data-icon="add_circle">add_circle</span>
+          <span class="font-bold tracking-tight text-primary">Add new farm</span>
+        </button>
+      </section>
+
+      <!-- STITCH SCREEN 03: Pal Answer & Confirm Card ("PAL SAYS") -->
+      <section id="card-pal-conversation" class="clay-card rounded-[32px] p-space-lg flex flex-col gap-4 my-2 w-full mx-auto">
+        <!-- PAL SAYS Section Header -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[18px] text-primary-container" data-icon="hearing">hearing</span>
+            <span class="font-label-md text-label-md text-primary-container font-bold tracking-wider">PAL SAYS</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <button onclick="sendSkipTurn()" class="text-[11px] font-bold text-secondary hover:text-primary underline cursor-pointer" type="button">Skip</button>
+            <button onclick="speakCurrentTurn()" class="inline-flex items-center gap-1.5 clay-pill-btn text-primary-container px-3.5 py-1.5 rounded-full font-label-md text-label-md transition-transform cursor-pointer" type="button">
+              <span class="material-symbols-outlined text-[16px]" data-icon="volume_up">volume_up</span>
+              <span class="font-semibold">Read</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- AI Response Verification -->
+        <p class="font-body-lg text-body-lg text-on-surface leading-normal">
+          <b id="pal-says-text">I heard: last season you planted chilli, and heavy rain floods the low corner. Is this right?</b>
+        </p>
+
+        <!-- Confirmation Interactive Buttons (Shown when pending_confirmation is present) -->
+        <div id="pending-confirm-box" class="hidden flex items-center gap-3 pt-1">
+          <button onclick="submitConfirmation(true)" class="flex-1 py-2.5 px-4 rounded-full clay-green-btn text-white font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 cursor-pointer" type="button">
+            <span class="material-symbols-outlined text-[18px]">check_circle</span>
+            <span>Yes, save</span>
+          </button>
+          <button onclick="submitConfirmation(false)" class="flex-1 py-2.5 px-4 rounded-full clay-pill-btn text-primary-container font-label-lg text-label-lg font-bold flex items-center justify-center gap-1.5 cursor-pointer" type="button">
+            <span class="material-symbols-outlined text-[18px]">edit</span>
+            <span>No, change</span>
+          </button>
+        </div>
+
+        <!-- Reassurance Status Disclaimer -->
+        <p id="reassurance-status-text" class="font-body-sm text-body-sm text-outline text-center pt-1"></p>
+      </section>
+
+      <!-- Bottom Voice Interaction Hub (Exact from Stitch 02 & 03) -->
+      <footer class="w-full pt-3 pb-2 relative flex flex-col items-center">
+        <!-- Live Listening / Processing Indicator Pill -->
+        <div id="listeningStatusPill" class="mb-2 px-4 py-1.5 rounded-full clay-pill-btn flex items-center gap-2 text-xs font-bold text-primary-container transition-all">
+          <span id="listeningDot" class="w-2.5 h-2.5 rounded-full bg-[#22c55e]"></span>
+          <span id="listeningStatusText">Mic ready • Tap Earth for live chat</span>
+        </div>
+
+        <div class="relative w-full flex flex-col items-center justify-center min-h-[200px] mx-auto">
+          <button onclick="openFaqPrompt()" aria-label="Frequently Asked Questions" class="absolute left-4 top-2 w-12 h-12 clay-circle-btn rounded-full flex flex-col items-center justify-center text-primary-container active:scale-95 transition-transform z-20 cursor-pointer" type="button">
+            <span class="material-symbols-outlined text-[18px]" data-icon="help">help</span>
+            <span class="font-label-sm text-[10px] font-bold tracking-tight">FAQ</span>
+          </button>
+
+          <!-- Interactive 3D Clay Planet Earth Voice Button -->
+          <div class="relative w-[172px] h-[172px] rounded-full clay-halo flex items-center justify-center mb-3 mx-auto" id="haloContainer">
+            <div aria-label="Tap or Hold to speak" data-mode="Hold to speak" class="earth-globe w-[148px] h-[148px] rounded-full flex flex-col items-center justify-center text-white relative cursor-pointer select-none overflow-hidden group shadow-md" id="earthVoiceBtn" role="button" tabindex="0">
+              <!-- Seamless Rotating Continents Layer (duplicated 50% + 50% for infinite smooth spin) -->
+              <div class="earth-spin-layer absolute inset-0 pointer-events-none" id="spinLand">
+                <!-- SVG Earth Continents Part 1 -->
+                <svg class="w-1/2 h-full flex-shrink-0" fill="none" viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <filter height="150%" id="clay-land-shadow" width="150%" x="-20%" y="-20%">
+                      <feDropShadow dx="1.5" dy="2.2" flood-color="#04181f" flood-opacity="0.65" stdDeviation="1.5"></feDropShadow>
+                    </filter>
+                    <linearGradient id="earth-land-grad1" x1="20%" x2="80%" y1="10%" y2="90%">
+                      <stop offset="0%" stop-color="#bbf7d0"></stop>
+                      <stop offset="25%" stop-color="#4ade80"></stop>
+                      <stop offset="70%" stop-color="#22c55e"></stop>
+                      <stop offset="100%" stop-color="#15803d"></stop>
+                    </linearGradient>
+                    <linearGradient id="earth-land-grad2" x1="15%" x2="85%" y1="15%" y2="85%">
+                      <stop offset="0%" stop-color="#86efac"></stop>
+                      <stop offset="40%" stop-color="#22c55e"></stop>
+                      <stop offset="85%" stop-color="#166534"></stop>
+                      <stop offset="100%" stop-color="#14532d"></stop>
+                    </linearGradient>
+                    <linearGradient id="clay-beach" x1="0%" x2="100%" y1="0%" y2="100%">
+                      <stop offset="0%" stop-color="#fef08a"></stop>
+                      <stop offset="100%" stop-color="#86efac"></stop>
+                    </linearGradient>
+                  </defs>
+                  <path d="M 16,32 C 24,20 40,22 48,34 C 54,42 48,52 38,58 C 30,64 34,74 42,82 C 46,88 42,98 34,106 C 28,114 30,126 34,134 C 36,138 28,142 22,138 C 14,132 18,120 20,110 C 22,98 16,92 12,82 C 8,72 10,48 16,32 Z" fill="url(#clay-beach)" filter="url(#clay-land-shadow)"></path>
+                  <path d="M 18,34 C 25,23 38,24 45,35 C 50,43 45,52 36,58 C 29,63 33,73 40,80 C 44,86 40,95 33,103 C 27,110 29,122 32,130 C 33,134 27,137 22,134 C 16,128 19,118 21,108 C 23,97 18,91 14,82 C 10,72 12,50 18,34 Z" fill="url(#earth-land-grad1)"></path>
+                  <ellipse cx="38" cy="18" fill="url(#earth-land-grad1)" filter="url(#clay-land-shadow)" rx="6" ry="3.5"></ellipse>
+                  <circle cx="56" cy="24" fill="url(#earth-land-grad2)" r="3"></circle>
+                  <path d="M 82,24 C 100,18 122,26 132,42 C 138,52 134,68 122,74 C 112,80 110,90 114,104 C 118,116 112,132 100,138 C 88,144 80,134 82,120 C 84,108 76,96 74,84 C 72,72 78,64 76,50 C 74,40 72,30 82,24 Z" fill="url(#clay-beach)" filter="url(#clay-land-shadow)"></path>
+                  <path d="M 84,26 C 99,21 119,28 129,43 C 134,52 131,66 120,72 C 111,77 109,87 113,100 C 116,112 110,126 99,132 C 89,137 82,128 84,116 C 85,105 78,94 76,83 C 74,72 80,64 78,51 C 76,42 74,32 84,26 Z" fill="url(#earth-land-grad2)"></path>
+                  <ellipse cx="126" cy="116" fill="url(#earth-land-grad1)" filter="url(#clay-land-shadow)" rx="6" ry="10" transform="rotate(22 126 116)"></ellipse>
+                </svg>
+                <!-- SVG Earth Continents Part 2 -->
+                <svg class="w-1/2 h-full flex-shrink-0" fill="none" viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M 16,32 C 24,20 40,22 48,34 C 54,42 48,52 38,58 C 30,64 34,74 42,82 C 46,88 42,98 34,106 C 28,114 30,126 34,134 C 36,138 28,142 22,138 C 14,132 18,120 20,110 C 22,98 16,92 12,82 C 8,72 10,48 16,32 Z" fill="url(#clay-beach)" filter="url(#clay-land-shadow)"></path>
+                  <path d="M 18,34 C 25,23 38,24 45,35 C 50,43 45,52 36,58 C 29,63 33,73 40,80 C 44,86 40,95 33,103 C 27,110 29,122 32,130 C 33,134 27,137 22,134 C 16,128 19,118 21,108 C 23,97 18,91 14,82 C 10,72 12,50 18,34 Z" fill="url(#earth-land-grad1)"></path>
+                  <ellipse cx="38" cy="18" fill="url(#earth-land-grad1)" filter="url(#clay-land-shadow)" rx="6" ry="3.5"></ellipse>
+                  <circle cx="56" cy="24" fill="url(#earth-land-grad2)" r="3"></circle>
+                  <path d="M 82,24 C 100,18 122,26 132,42 C 138,52 134,68 122,74 C 112,80 110,90 114,104 C 118,116 112,132 100,138 C 88,144 80,134 82,120 C 84,108 76,96 74,84 C 72,72 78,64 76,50 C 74,40 72,30 82,24 Z" fill="url(#clay-beach)" filter="url(#clay-land-shadow)"></path>
+                  <path d="M 84,26 C 99,21 119,28 129,43 C 134,52 131,66 120,72 C 111,77 109,87 113,100 C 116,112 110,126 99,132 C 89,137 82,128 84,116 C 85,105 78,94 76,83 C 74,72 80,64 78,51 C 76,42 74,32 84,26 Z" fill="url(#earth-land-grad2)"></path>
+                  <ellipse cx="126" cy="116" fill="url(#earth-land-grad1)" filter="url(#clay-land-shadow)" rx="6" ry="10" transform="rotate(22 126 116)"></ellipse>
+                </svg>
+              </div>
+              <!-- Seamless Rotating Clouds Layer -->
+              <div class="earth-clouds-layer absolute inset-0 pointer-events-none" id="spinClouds">
+                <svg class="w-1/2 h-full flex-shrink-0" fill="none" viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <filter height="140%" id="clay-cloud-shadow-2" width="140%" x="-20%" y="-20%">
+                      <feDropShadow dx="1.2" dy="2" flood-color="#0a263b" flood-opacity="0.38" stdDeviation="1.5"></feDropShadow>
+                    </filter>
+                  </defs>
+                  <path d="M 8,46 C 26,40 54,48 78,42 C 96,37 118,46 140,40 C 146,38 150,44 144,48 C 122,55 98,49 78,52 C 54,56 30,51 10,55 C 4,56 3,48 8,46 Z" fill="rgba(255, 255, 255, 0.94)" filter="url(#clay-cloud-shadow-2)"></path>
+                  <path d="M 22,96 C 46,90 70,100 98,92 C 118,87 138,98 150,92 C 153,95 148,102 136,104 C 112,107 92,100 70,104 C 48,108 30,103 18,103 C 14,101 16,97 22,96 Z" fill="rgba(255, 255, 255, 0.9)" filter="url(#clay-cloud-shadow-2)"></path>
+                  <ellipse cx="64" cy="136" fill="rgba(255, 255, 255, 0.82)" filter="url(#clay-cloud-shadow-2)" rx="20" ry="4"></ellipse>
+                  <ellipse cx="40" cy="14" fill="rgba(255, 255, 255, 0.88)" rx="14" ry="3.5"></ellipse>
+                </svg>
+                <svg class="w-1/2 h-full flex-shrink-0" fill="none" viewBox="0 0 148 148" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M 8,46 C 26,40 54,48 78,42 C 96,37 118,46 140,40 C 146,38 150,44 144,48 C 122,55 98,49 78,52 C 54,56 30,51 10,55 C 4,56 3,48 8,46 Z" fill="rgba(255, 255, 255, 0.94)" filter="url(#clay-cloud-shadow-2)"></path>
+                  <path d="M 22,96 C 46,90 70,100 98,92 C 118,87 138,98 150,92 C 153,95 148,102 136,104 C 112,107 92,100 70,104 C 48,108 30,103 18,103 C 14,101 16,97 22,96 Z" fill="rgba(255, 255, 255, 0.9)" filter="url(#clay-cloud-shadow-2)"></path>
+                  <ellipse cx="64" cy="136" fill="rgba(255, 255, 255, 0.82)" filter="url(#clay-cloud-shadow-2)" rx="20" ry="4"></ellipse>
+                  <ellipse cx="40" cy="14" fill="rgba(255, 255, 255, 0.88)" rx="14" ry="3.5"></ellipse>
+                </svg>
+              </div>
+              <!-- Atmosphere 3D Rim Gradient & Specular Top-Left Highlight -->
+              <svg class="absolute inset-0 w-full h-full pointer-events-none" fill="none" viewBox="0 0 148 148">
+                <defs>
+                  <radialGradient cx="45%" cy="38%" id="planet-atmosphere-halo" r="56%">
+                    <stop offset="68%" stop-color="rgba(255,255,255,0)"></stop>
+                    <stop offset="88%" stop-color="rgba(147, 215, 255, 0.28)"></stop>
+                    <stop offset="100%" stop-color="rgba(255,255,255,0.7)"></stop>
+                  </radialGradient>
+                  <linearGradient id="planet-specular-light" x1="15%" x2="85%" y1="10%" y2="90%">
+                    <stop offset="0%" stop-color="rgba(255,255,255,0.55)"></stop>
+                    <stop offset="42%" stop-color="rgba(255,255,255,0.1)"></stop>
+                    <stop offset="100%" stop-color="rgba(0,0,0,0)"></stop>
+                  </linearGradient>
+                </defs>
+                <circle cx="74" cy="74" fill="url(#planet-atmosphere-halo)" r="73.5"></circle>
+                <ellipse cx="50" cy="38" fill="url(#planet-specular-light)" rx="34" ry="20" transform="rotate(-26 50 38)"></ellipse>
+              </svg>
+              <!-- Central Interactive Text & Dynamic Audio Indicator Feedback -->
+              <div class="relative z-10 flex flex-col items-center justify-center pointer-events-none px-3">
+                <div class="hidden items-center justify-center h-6 mb-1" id="voiceWaveIndicator">
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                  <div class="wave-bar"></div>
+                </div>
+                <span class="font-label-sm text-[12px] font-bold tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] transition-all text-center" id="voiceBtnLabel">Tap to speak</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Secondary Buttons (Language Toggle) -->
+          <div class="flex items-center justify-center gap-3 z-10 mx-auto">
+            <button onclick="toggleLanguage()" class="clay-pill-btn text-primary-container px-3.5 py-1.5 rounded-full font-label-md text-label-md flex items-center gap-1 active:scale-95 transition-transform cursor-pointer" type="button">
+              <span class="material-symbols-outlined text-[16px]" data-icon="language">language</span>
+              <span class="font-bold" id="langCodeLabel">EN</span>
+              <span class="material-symbols-outlined text-[16px]" data-icon="arrow_drop_down">arrow_drop_down</span>
+            </button>
+          </div>
+        </div>
+        <!-- Anchored Privacy Helper Text (Exact from Stitch 02 & 03) -->
+        <p class="font-body-sm text-body-sm text-outline text-center mt-4 max-w-[320px] mx-auto leading-tight">We do not keep your voice. We only save facts you confirm.</p>
+      </footer>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- STITCH SCREEN 04: Pal Rotation Detail                               -->
+    <!-- =================================================================== -->
+    <div id="view-rotation-detail" class="hidden flex-1 flex-col w-full">
+      <!-- Back Button and Title -->
+      <nav aria-label="Breadcrumb" class="flex items-center justify-between my-2.5 px-0.5">
+        <div class="flex items-center gap-3.5">
+          <button onclick="closeRotationDetailView()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full clay-pill-btn text-[#1b4d3e] text-sm font-bold tracking-tight active:scale-95 transition-all cursor-pointer" type="button">
+            <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+            <span>Back</span>
+          </button>
+          <h1 class="text-[20px] font-bold tracking-tight text-[#1d1b19]">Rotation detail</h1>
+        </div>
+        <div class="flex items-center gap-1">
+          <button onclick="changeScenario('normal')" id="scen-normal" class="px-2.5 py-1 rounded-full text-[11px] font-bold clay-nav-active text-white cursor-pointer" type="button">Normal</button>
+          <button onclick="changeScenario('drier')" id="scen-drier" class="px-2.5 py-1 rounded-full text-[11px] font-bold clay-pill-btn text-[#1b4d3e] cursor-pointer" type="button">Drier</button>
+          <button onclick="changeScenario('wetter')" id="scen-wetter" class="px-2.5 py-1 rounded-full text-[11px] font-bold clay-pill-btn text-[#1b4d3e] cursor-pointer" type="button">Wetter</button>
+        </div>
+      </nav>
+
+      <!-- 3 Option Switcher Pills -->
+      <div id="rotation-option-tabs" class="flex items-center gap-2 my-2 overflow-x-auto pb-1"></div>
+
+      <!-- Option Title Bar & Listen Pill -->
+      <section class="mt-2 mb-4 flex items-start justify-between gap-3 px-1" data-purpose="rotation-header">
+        <div>
+          <h2 id="rotationSuggestedTitle" class="text-[22px] font-bold leading-tight text-[#1d1b19] tracking-tight">Suggested → Chili</h2>
+        </div>
+        <button onclick="listenToRotationSummary()" class="shrink-0 mt-1 flex items-center gap-1.5 px-4 py-2 clay-pill-btn text-[#1b4d3e] text-xs font-bold rounded-full active:scale-95 transition-all cursor-pointer" type="button">
+          <span class="material-symbols-outlined text-[16px]">volume_up</span>
+          <span>Listen</span>
+        </button>
+      </section>
+
+      <!-- Content Cards in Claymorphism Style (Exact from Stitch 04) -->
+      <div id="rotation-cards-container" class="space-y-4 pb-8"></div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- RECORDS TAB VIEW (#screen-records)                                  -->
+    <!-- =================================================================== -->
+    <div id="screen-records" class="hidden flex-1 flex-col w-full space-y-4 my-2">
+      <div class="flex items-center justify-between px-1">
+        <h2 class="font-headline-md text-headline-md font-bold text-on-surface tracking-tight">Farm Memory Records</h2>
+        <button onclick="exportCurrentFarm()" class="clay-pill-btn px-3.5 py-1.5 rounded-full text-xs font-bold text-primary-container flex items-center gap-1 cursor-pointer" type="button">
+          <span class="material-symbols-outlined text-[16px]">download</span>
+          <span>Export</span>
+        </button>
+      </div>
+      <div id="records-memory-container" class="space-y-3"></div>
+      <button onclick="deleteCurrentFarm()" class="w-full py-3 rounded-full clay-pill-btn text-[#ba1a1a] font-bold text-sm flex items-center justify-center gap-1.5 cursor-pointer" type="button">
+        <span class="material-symbols-outlined text-[18px]">delete</span>
+        <span>Delete Farm Memory</span>
+      </button>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- SETTINGS TAB VIEW (#screen-settings)                                -->
+    <!-- =================================================================== -->
+    <div id="screen-settings" class="hidden flex-1 flex-col w-full space-y-4 my-2">
+      <article class="clay-card rounded-[28px] p-5 space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#1b4d3e]">
+              <span class="material-symbols-outlined text-[18px]">map</span>
+            </div>
+            <div>
+              <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight leading-tight">Plot District &amp; Location</h3>
+              <p class="text-[11px] text-outline">Tap your district on the Kedah state shape</p>
+            </div>
+          </div>
+          <span id="district-save-status" class="px-2.5 py-1 rounded-full clay-badge-green text-[#1b4d3e] text-[11px] font-bold hidden">Saved</span>
+        </div>
+
+        <!-- Selected District Indicator Pill -->
+        <div class="flex items-center justify-between px-3.5 py-2 rounded-2xl bg-[#f5eee7] border border-[#d6cdc4]">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#1b4d3e]"></span>
+            <span id="selected-district-badge" class="text-xs font-bold text-[#1d1b19]">Kuala Muda (Sungai Petani), Kedah</span>
+          </div>
+          <span id="selected-district-coords" class="text-[11px] font-medium text-outline">5.6470, 100.4870</span>
+        </div>
+
+        <!-- Interactive Clickable Kedah State Map (12 Districts) -->
+        <div class="w-full rounded-[22px] bg-[#f5eee7] p-2.5 border border-[#e5dcd3] shadow-inner">
+          <svg id="kedah-district-map" viewBox="0 0 320 330" class="w-full h-auto max-h-[300px] select-none" role="img" aria-label="Interactive Kedah State District Map">
+            <!-- Langkawi Island (NW) -->
+            <path id="dist-langkawi" class="kedah-district-shape" data-district-id="langkawi" data-locality="Langkawi, Kedah" data-lat="6.3500" data-lon="99.8000"
+              d="M 16,38 C 28,26 52,24 64,34 C 70,44 62,62 46,66 C 28,68 14,56 16,38 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-langkawi" class="kedah-district-label" x="41" y="47">Langkawi</text>
+
+            <!-- Kubang Pasu (North-West Mainland) -->
+            <path id="dist-kubang_pasu" class="kedah-district-shape" data-district-id="kubang_pasu" data-locality="Kubang Pasu, Kedah" data-lat="6.3200" data-lon="100.4200"
+              d="M 96,24 L 166,14 L 178,52 L 162,78 L 122,82 L 98,66 L 90,42 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-kubang_pasu" class="kedah-district-label" x="135" y="50">Kubang Pasu</text>
+
+            <!-- Padang Terap (North-East Inland) -->
+            <path id="dist-padang_terap" class="kedah-district-shape" data-district-id="padang_terap" data-locality="Padang Terap, Kedah" data-lat="6.2600" data-lon="100.6800"
+              d="M 166,14 L 222,20 L 248,54 L 240,94 L 194,96 L 176,78 L 178,52 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-padang_terap" class="kedah-district-label" x="208" y="56">Padang</text>
+            <text id="lbl-padang_terap-2" class="kedah-district-label" x="208" y="67">Terap</text>
+
+            <!-- Kota Setar (NW Coast / MADA) -->
+            <path id="dist-kota_setar" class="kedah-district-shape" data-district-id="kota_setar" data-locality="Kota Setar, Kedah" data-lat="6.1200" data-lon="100.3700"
+              d="M 98,66 L 122,82 L 146,84 L 148,118 L 118,126 L 94,108 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-kota_setar" class="kedah-district-label" x="121" y="102">Kota Setar</text>
+
+            <!-- Pokok Sena (North-Central) -->
+            <path id="dist-pokok_sena" class="kedah-district-shape" data-district-id="pokok_sena" data-locality="Pokok Sena, Kedah" data-lat="6.1700" data-lon="100.5200"
+              d="M 146,80 L 176,78 L 194,96 L 182,120 L 148,118 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-pokok_sena" class="kedah-district-label" x="170" y="96">Pokok</text>
+            <text id="lbl-pokok_sena-2" class="kedah-district-label" x="170" y="106">Sena</text>
+
+            <!-- Pendang (Central Plain) -->
+            <path id="dist-pendang" class="kedah-district-shape" data-district-id="pendang" data-locality="Pendang, Kedah" data-lat="5.9900" data-lon="100.4700"
+              d="M 118,126 L 148,118 L 182,120 L 188,158 L 144,166 L 124,148 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-pendang" class="kedah-district-label" x="155" y="142">Pendang</text>
+
+            <!-- Yan (West Coast) -->
+            <path id="dist-yan" class="kedah-district-shape" data-district-id="yan" data-locality="Yan, Kedah" data-lat="5.8000" data-lon="100.3700"
+              d="M 102,128 L 124,148 L 144,166 L 130,188 L 98,178 L 96,150 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-yan" class="kedah-district-label" x="118" y="160">Yan</text>
+
+            <!-- Sik (East-Central Inland) -->
+            <path id="dist-sik" class="kedah-district-shape" data-district-id="sik" data-locality="Sik, Kedah" data-lat="5.8200" data-lon="100.7400"
+              d="M 194,96 L 240,94 L 274,116 L 284,154 L 246,184 L 188,166 L 182,120 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-sik" class="kedah-district-label" x="232" y="138">Sik</text>
+
+            <!-- Kuala Muda / Sungai Petani (SW Coast) -->
+            <path id="dist-kuala_muda" class="kedah-district-shape active" data-district-id="kuala_muda" data-locality="Sungai Petani, Kedah" data-lat="5.6470" data-lon="100.4870"
+              d="M 104,180 L 130,188 L 144,166 L 188,166 L 194,206 L 154,228 L 106,222 L 96,198 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-kuala_muda" class="kedah-district-label active" x="148" y="193">Kuala Muda</text>
+            <text id="lbl-kuala_muda-2" class="kedah-district-label active" x="148" y="204">(Sg. Petani)</text>
+
+            <!-- Baling (South-East Inland) -->
+            <path id="dist-baling" class="kedah-district-shape" data-district-id="baling" data-locality="Baling, Kedah" data-lat="5.6700" data-lon="100.9200"
+              d="M 188,166 L 246,184 L 276,204 L 266,246 L 218,242 L 194,206 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-baling" class="kedah-district-label" x="232" y="212">Baling</text>
+
+            <!-- Kulim (South) -->
+            <path id="dist-kulim" class="kedah-district-shape" data-district-id="kulim" data-locality="Kulim, Kedah" data-lat="5.3600" data-lon="100.5600"
+              d="M 134,226 L 154,228 L 194,206 L 218,242 L 196,274 L 142,272 L 128,248 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-kulim" class="kedah-district-label" x="172" y="246">Kulim</text>
+
+            <!-- Bandar Baharu (Southern Tip) -->
+            <path id="dist-bandar_baharu" class="kedah-district-shape" data-district-id="bandar_baharu" data-locality="Bandar Baharu, Kedah" data-lat="5.1300" data-lon="100.5000"
+              d="M 142,272 L 196,274 L 188,308 L 152,316 L 136,294 Z"
+              onclick="selectDistrictFromMap(this)" />
+            <text id="lbl-bandar_baharu" class="kedah-district-label" x="167" y="290">Bandar</text>
+            <text id="lbl-bandar_baharu-2" class="kedah-district-label" x="167" y="300">Baharu</text>
+          </svg>
+        </div>
+
+        <details class="pt-1">
+          <summary class="text-xs font-bold text-primary-container cursor-pointer select-none">Manual coordinates &amp; GPS fallback</summary>
+          <div class="mt-2.5 space-y-2">
+            <input id="settings-locality" type="text" value="Sungai Petani, Kedah" class="w-full px-3.5 py-2.5 rounded-2xl bg-[#f5eee7] border border-[#c0c9c3] text-sm font-medium"/>
+            <div class="grid grid-cols-2 gap-2">
+              <input id="settings-lat" type="number" step="0.0001" placeholder="Lat (5.6470)" class="px-3.5 py-2 rounded-2xl bg-[#f5eee7] border border-[#c0c9c3] text-sm"/>
+              <input id="settings-lon" type="number" step="0.0001" placeholder="Lon (100.4870)" class="px-3.5 py-2 rounded-2xl bg-[#f5eee7] border border-[#c0c9c3] text-sm"/>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="saveLocationFromSettings()" class="flex-1 py-2.5 rounded-full clay-green-btn text-white text-xs font-bold cursor-pointer" type="button">Save Location</button>
+              <button onclick="useBrowserGps()" class="px-4 py-2.5 rounded-full clay-pill-btn text-primary-container text-xs font-bold cursor-pointer" type="button">GPS</button>
+            </div>
+          </div>
+        </details>
+      </article>
+
+      <article class="clay-card rounded-[28px] p-5 space-y-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#1b4d3e]">
+            <span class="material-symbols-outlined text-[18px]">compost</span>
+          </div>
+          <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Candidate Crops &amp; Realtime</h3>
+        </div>
+        <input id="custom-crops-input" type="text" value="" placeholder="Auto-rank best crops (or e.g. sweet potato, chilli, sweet corn)" class="w-full px-3.5 py-2.5 rounded-2xl bg-[#f5eee7] border border-[#c0c9c3] text-sm font-medium"/>
+        <div class="pt-1 space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-[#1d1b19]">Voice Noise Filter</span>
+            <span id="voice-filter-meter" class="text-[11px] font-medium text-outline">Strict (Noisy / Close Mic)</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="setVoiceFilterMode('strict')" id="filter-btn-strict" class="py-2 px-3 rounded-full clay-nav-active text-white text-[11px] font-bold cursor-pointer" type="button">Strict (Close Mic)</button>
+            <button onclick="setVoiceFilterMode('balanced')" id="filter-btn-balanced" class="py-2 px-3 rounded-full clay-pill-btn text-primary-container text-[11px] font-bold cursor-pointer" type="button">Balanced (Quiet)</button>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="runComparison()" class="flex-1 py-2.5 rounded-full clay-green-btn text-white text-xs font-bold cursor-pointer" type="button">Compare Crops</button>
+          <button onclick="toggleRealtimeHandsFree()" id="btn-realtime-ws" class="px-4 py-2.5 rounded-full clay-pill-btn text-primary-container text-xs font-bold cursor-pointer" type="button">Live WS</button>
+        </div>
+        <p class="text-xs text-outline leading-snug">Audio is processed in-memory via OpenAI speech-to-text and never stored. We do not keep your voice. We only save facts you confirm.</p>
+      </article>
+    </div>
+
+  </main>
+
+  <script>
+    const state = {
+      language: 'en',
+      farmId: 'green_valley_plot',
+      sessionId: 'sess_' + Math.random().toString(36).slice(2, 10),
+      currentQuestionId: null,
+      pendingConfirmation: null,
+      accessToken: null,
+      supabaseClient: null,
+      supabaseEnabled: false,
+      scenario: 'normal',
+      comparison: null,
+      selectedOptionIdx: 0,
+      mediaRecorder: null,
+      audioChunks: [],
+      realtimeWs: null,
+      isListening: false,
+      farmCardOpen: false,
+      voiceFilterMode: 'strict',
+    };
+
+    const DEFAULT_FARMS = [
+      { farm_id: 'green_valley_plot', farm_name: 'Green Valley Plot', locality: 'Sungai Petani, Kedah' },
+      { farm_id: 'sunrise_hill_farm', farm_name: 'Sunrise Hill Farm', locality: 'Kuala Muda, Kedah' },
+      { farm_id: 'riverbend_fields', farm_name: 'Riverbend Fields', locality: 'Kota Setar, Kedah' },
+    ];
+
+    function escapeHtml(val) {
+      return String(val ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function authHeaders(extra = {}) {
+      const h = { ...extra };
+      if (state.accessToken) {
+        h['Authorization'] = `Bearer ${state.accessToken}`;
+      }
+      return h;
+    }
+
+    async function initApp() {
+      try {
+        const res = await fetch('/api/config');
+        const cfg = await res.json();
+        state.supabaseEnabled = Boolean(cfg.supabase_enabled);
+        if (cfg.supabase_enabled && cfg.supabase_url && cfg.supabase_anon_key && window.supabase) {
+          state.supabaseClient = window.supabase.createClient(cfg.supabase_url, cfg.supabase_anon_key);
+        }
+      } catch (e) {
+        console.warn('Config fallback:', e);
+      }
+      setupEarthHoldInteraction();
+    }
+
+    function togglePasswordVisibility() {
+      const operatorKey = document.getElementById('operatorKey');
+      const icon = document.getElementById('pwdToggleIcon');
+      if (!operatorKey || !icon) return;
+      const isPassword = operatorKey.type === 'password';
+      operatorKey.type = isPassword ? 'text' : 'password';
+      icon.textContent = isPassword ? 'visibility_off' : 'visibility';
+    }
+
+    async function handleSignIn() {
+      const btnSignIn = document.getElementById('btnSignIn');
+      const email = document.getElementById('operatorId')?.value?.trim() || '';
+      const password = document.getElementById('operatorKey')?.value?.trim() || '';
+      const errEl = document.getElementById('loginErrorMsg');
+      if (errEl) errEl.classList.add('hidden');
+
+      if (btnSignIn) {
+        btnSignIn.disabled = true;
+        btnSignIn.innerHTML = `
+          <span class="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+          <span>Accessing Farm Fleet...</span>
+        `;
+      }
+
+      if (state.supabaseClient && email && password && !password.startsWith('••')) {
+        const { data, error } = await state.supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) {
+          const signUpRes = await state.supabaseClient.auth.signUp({ email, password });
+          if (!signUpRes.error) {
+            state.accessToken = signUpRes.data?.session?.access_token || null;
+          }
+        } else {
+          state.accessToken = data?.session?.access_token || null;
+        }
+      }
+
+      setTimeout(async () => {
+        if (btnSignIn) {
+          btnSignIn.innerHTML = `
+            <span class="material-symbols-outlined text-lg">check</span>
+            <span>Welcome, Pilot Jensen</span>
+          `;
+        }
+        setTimeout(async () => {
+          document.getElementById('screen-entrance').classList.add('hidden');
+          document.getElementById('screen-app').classList.remove('hidden');
+          await loadFarmsList();
+          await selectFarm(state.farmId, false);
+        }, 450);
+      }, 450);
+    }
+
+    function switchTopTab(tab) {
+      const tabs = ['pal', 'records', 'settings'];
+      tabs.forEach(t => {
+        const el = document.getElementById(`nav-tab-${t}`);
+        if (!el) return;
+        if (t === tab) {
+          el.className = 'flex flex-col items-center justify-center clay-nav-active text-on-primary rounded-full px-5 py-2 -my-0.5 transition-transform duration-100 cursor-pointer';
+        } else {
+          el.className = 'flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all duration-150 active:scale-95 px-2 py-1 rounded-full cursor-pointer';
+        }
+      });
+
+      document.getElementById('pal-hub-wrapper').classList.toggle('hidden', tab !== 'pal');
+      document.getElementById('view-rotation-detail').classList.add('hidden');
+      document.getElementById('view-rotation-detail').classList.remove('flex');
+      document.getElementById('screen-records').classList.toggle('hidden', tab !== 'records');
+      document.getElementById('screen-records').classList.toggle('flex', tab === 'records');
+      document.getElementById('screen-settings').classList.toggle('hidden', tab !== 'settings');
+      document.getElementById('screen-settings').classList.toggle('flex', tab === 'settings');
+
+      if (tab === 'records') {
+        openRecordsView();
+      }
+    }
+
+    function toggleFarmSelectionCard() {
+      state.farmCardOpen = !state.farmCardOpen;
+      const farmCard = document.getElementById('card-farm-selection');
+      const convCard = document.getElementById('card-pal-conversation');
+      const farmPill = document.getElementById('pill-btn-farm');
+      const farmIcon = document.getElementById('pill-icon-farm');
+
+      if (state.farmCardOpen) {
+        farmCard.classList.remove('hidden');
+        convCard.classList.add('hidden');
+        farmPill.className = 'inline-flex items-center gap-2 clay-green-btn text-white rounded-full px-5 py-2.5 font-label-lg text-label-lg transition-transform duration-100 cursor-pointer';
+        farmIcon.className = 'material-symbols-outlined text-[20px] text-white';
+        loadFarmsList();
+      } else {
+        farmCard.classList.add('hidden');
+        convCard.classList.remove('hidden');
+        farmPill.className = 'inline-flex items-center gap-2 clay-pill-btn text-primary-container rounded-full px-5 py-2.5 font-label-lg text-label-lg transition-transform duration-100 cursor-pointer';
+        farmIcon.className = 'material-symbols-outlined text-[20px] text-primary-container';
+      }
+    }
+
+    async function loadFarmsList() {
+      let apiFarms = [];
+      try {
+        const res = await fetch('/api/farms', { headers: authHeaders() });
+        const data = await res.json();
+        apiFarms = data.farms || [];
+      } catch (e) {}
+
+      const merged = [...DEFAULT_FARMS];
+      apiFarms.forEach(f => {
+        if (!merged.some(m => m.farm_id === f.farm_id)) {
+          merged.push(f);
+        }
+      });
+
+      const container = document.getElementById('farms-list-container');
+      container.innerHTML = merged.map(f => {
+        const fid = escapeHtml(f.farm_id);
+        const fname = escapeHtml(f.farm_name || f.farm_id);
+        const isActive = f.farm_id === state.farmId;
+        if (isActive) {
+          return `
+            <div onclick="selectFarm('${fid}', true)" class="clay-card rounded-2xl p-3.5 border-2 border-primary/20 bg-surface-container-lowest transition-all cursor-pointer">
+              <div class="flex items-start justify-between">
+                <div class="flex flex-col">
+                  <div class="flex items-center gap-2">
+                    <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">${fname}</h3>
+                    <span class="clay-green-btn text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <span class="material-symbols-outlined text-[12px]">check_circle</span>Active
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        return `
+          <div onclick="selectFarm('${fid}', true)" class="clay-card rounded-2xl p-3.5 bg-surface-container-lowest hover:bg-surface-container-low transition-all cursor-pointer">
+            <div class="flex items-start justify-between">
+              <div class="flex flex-col">
+                <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">${fname}</h3>
+              </div>
+              <button class="clay-pill-btn px-3 py-1 rounded-full text-label-sm font-bold text-primary active:scale-95 transition-transform flex items-center gap-1" type="button">
+                <span class="material-symbols-outlined text-[14px]">swap_horiz</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function promptAddNewFarm() {
+      const name = window.prompt(state.language === 'ms' ? 'Nama petak / kebun baharu:' : 'New farm / plot name:', 'North Bed Plot');
+      if (!name || !name.trim()) return;
+      const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'farm_new';
+      DEFAULT_FARMS.push({ farm_id: slug, farm_name: name.trim(), locality: 'Sungai Petani, Kedah' });
+      await selectFarm(slug, true);
+    }
+
+    async function selectFarm(farmId, closeFarmCard = true) {
+      state.farmId = farmId;
+      try {
+        const res = await fetch(`/api/farms/${encodeURIComponent(farmId)}`, { headers: authHeaders() });
+        const farm = await res.json();
+        document.getElementById('settings-locality').value = farm.location?.locality || 'Sungai Petani, Kedah';
+        document.getElementById('settings-lat').value = farm.location?.latitude || '';
+        document.getElementById('settings-lon').value = farm.location?.longitude || '';
+        syncDistrictMapFromLocality(
+          farm.location?.locality || 'Sungai Petani, Kedah',
+          farm.location?.latitude,
+          farm.location?.longitude
+        );
+
+        const chkRes = await fetch(`/api/farms/${encodeURIComponent(farmId)}/check-in?language=${state.language}`, {
+          headers: authHeaders()
+        });
+        const chkData = await chkRes.json();
+        if (chkData.checkin && chkData.checkin.prompt) {
+          state.currentQuestionId = chkData.checkin.question_id || null;
+          document.getElementById('pal-says-text').textContent = chkData.checkin.prompt;
+        }
+      } catch (e) {}
+
+      await loadFarmsList();
+      if (closeFarmCard && state.farmCardOpen) {
+        toggleFarmSelectionCard();
+      }
+      await runComparison();
+      notifyRealtimeContextRefresh();
+    }
+
+    function toggleLanguage() {
+      const wasListening = state.isListening;
+      state.language = state.language === 'en' ? 'ms' : 'en';
+      document.getElementById('langCodeLabel').textContent = state.language.toUpperCase();
+      if (wasListening) {
+        stopLiveConversation();
+        startLiveConversation();
+      } else {
+        setEarthVisualActive(false);
+        setListeningIndicator('idle');
+      }
+      selectFarm(state.farmId, false);
+    }
+
+    async function openFaqPrompt() {
+      const defaultQ = state.language === 'ms'
+        ? 'Kenapa kacang tanah sesuai selepas cili?'
+        : 'What if next season is drier and I only have rain?';
+      const text = window.prompt(
+        state.language === 'ms'
+          ? 'Tanya soalan atau beritahu pemerhatian kebun:'
+          : 'Ask a question or report a field observation:',
+        defaultQ
+      );
+      if (text && text.trim()) {
+        await submitTextUtterance(text.trim());
+      }
+    }
+
+    async function sendSkipTurn() {
+      await submitTextUtterance(state.language === 'ms' ? 'tak pasti' : 'skip');
+    }
+
+    async function submitTextUtterance(text) {
+      if (state.farmCardOpen) toggleFarmSelectionCard();
+      try {
+        const res = await fetch('/api/voice/chat', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            farm_id: state.farmId,
+            session_id: state.sessionId,
+            language: state.language,
+            text: text,
+            current_question_id: state.currentQuestionId,
+          }),
+        });
+        const turn = await res.json();
+        renderVoiceTurn(turn);
+      } catch (e) {
+        console.error('Voice chat error:', e);
+      }
+    }
+
+    function renderVoiceTurn(turn) {
+      if (state.farmCardOpen) toggleFarmSelectionCard();
+      document.getElementById('pal-says-text').textContent = turn.assistant_text || '';
+      if (turn.next_question_id) {
+        state.currentQuestionId = turn.next_question_id;
+      }
+
+      const basisText = (turn.answer_basis || []).join(' • ');
+      document.getElementById('reassurance-status-text').textContent = basisText
+        ? `Basis: ${basisText}`
+        : '';
+
+      const confirmBox = document.getElementById('pending-confirm-box');
+      if (turn.pending_confirmation) {
+        state.pendingConfirmation = turn.pending_confirmation;
+        if (turn.pending_confirmation.confirmation_prompt) {
+          document.getElementById('pal-says-text').textContent = turn.pending_confirmation.confirmation_prompt;
+        }
+        confirmBox.classList.remove('hidden');
+      } else {
+        state.pendingConfirmation = null;
+        confirmBox.classList.add('hidden');
+      }
+
+      if (turn.tts_audio_base64) {
+        liveSubMode = 'speaking_pal';
+        setListeningIndicator('speaking_pal');
+        const audio = new Audio(`data:audio/mp3;base64,${turn.tts_audio_base64}`);
+        audio.onended = () => {
+          liveEchoTailUntil = Date.now() + 280;
+          if (state.isListening) {
+            liveSubMode = 'listening';
+            setListeningIndicator('listening');
+          }
+        };
+        audio.play().catch(() => {
+          if (state.isListening) {
+            liveSubMode = 'listening';
+            setListeningIndicator('listening');
+          }
+        });
+      }
+      if (turn.assistant_text) {
+        syncSuggestedCropFromAssistantText(turn.assistant_text);
+      }
+    }
+
+    async function submitConfirmation(accepted) {
+      if (!state.pendingConfirmation) return;
+      try {
+        const res = await fetch('/api/voice/confirm', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            farm_id: state.farmId,
+            session_id: state.sessionId,
+            confirmation_id: state.pendingConfirmation.confirmation_id,
+            accepted: accepted,
+            language: state.language,
+          }),
+        });
+        const data = await res.json();
+        document.getElementById('pending-confirm-box').classList.add('hidden');
+        state.pendingConfirmation = null;
+        if (data.next_question) {
+          state.currentQuestionId = data.next_question.question_id;
+          const nextPrompt = data.next_question.prompts?.[state.language] || data.next_question.prompts?.en;
+          if (nextPrompt) document.getElementById('pal-says-text').textContent = nextPrompt;
+        }
+        await runComparison();
+        notifyRealtimeContextRefresh();
+      } catch (e) {
+        console.error('Confirm error:', e);
+      }
+    }
+
+    function speakCurrentTurn() {
+      const text = document.getElementById('pal-says-text')?.textContent || '';
+      if (!text || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = state.language === 'ms' ? 'ms-MY' : 'en-US';
+      window.speechSynthesis.speak(u);
+    }
+
+    function setListeningIndicator(mode, detailText = '') {
+      const pill = document.getElementById('listeningStatusPill');
+      const dot = document.getElementById('listeningDot');
+      const txt = document.getElementById('listeningStatusText');
+      if (!pill || !dot || !txt) return;
+
+      if (mode === 'listening' || mode === 'speaking_user') {
+        pill.className = 'mb-2 px-4 py-1.5 rounded-full clay-green-btn text-white flex items-center gap-2 text-xs font-bold transition-all shadow-md';
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-[#92f7c3] animate-ping';
+        txt.textContent = detailText || (
+          mode === 'speaking_user'
+            ? (state.language === 'ms' ? 'Mendengar suara anda...' : 'Hearing you speak...')
+            : (state.language === 'ms' ? 'Perbualan langsung aktif • Bercakap bila-bila masa' : 'Live conversation • Speak anytime')
+        );
+      } else if (mode === 'ambient_filtered') {
+        pill.className = 'mb-2 px-4 py-1.5 rounded-full clay-green-btn text-white flex items-center gap-2 text-xs font-bold transition-all shadow-md';
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-[#fde68a]';
+        txt.textContent = detailText || (state.language === 'ms' ? 'Bunyi latar ditapis • Bercakap dekat mikrofon' : 'Background noise filtered • Speak close to mic');
+      } else if (mode === 'speaking_pal') {
+        pill.className = 'mb-2 px-4 py-1.5 rounded-full clay-green-btn text-white flex items-center gap-2 text-xs font-bold transition-all shadow-md';
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-[#bbf7d0] animate-pulse';
+        txt.textContent = detailText || (state.language === 'ms' ? 'Pal sedang bercakap • Bercakap untuk mencelah' : 'Pal is speaking • Speak anytime');
+      } else if (mode === 'processing') {
+        pill.className = 'mb-2 px-4 py-1.5 rounded-full clay-pill-btn text-primary-container flex items-center gap-2 text-xs font-bold transition-all';
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-[#1b4d3e] animate-pulse';
+        txt.textContent = detailText || (state.language === 'ms' ? 'Pal sedang berfikir...' : 'Pal is thinking...');
+      } else {
+        pill.className = 'mb-2 px-4 py-1.5 rounded-full clay-pill-btn text-primary-container flex items-center gap-2 text-xs font-bold transition-all';
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-[#22c55e]';
+        txt.textContent = detailText || (state.language === 'ms' ? 'Sedia • Ketik Bumi untuk bual langsung' : 'Mic ready • Tap Earth for live chat');
+      }
+    }
+
+    let liveAudioCtx = null;
+    let liveMicStream = null;
+    let liveProcessor = null;
+    let liveSource = null;
+    let liveFilterGraph = null;
+    let liveNextPlayTime = 0;
+    let liveActiveSources = [];
+    let liveTimerInterval = null;
+    let liveElapsedSec = 0;
+    let liveSubMode = 'listening';
+    let liveEchoTailUntil = 0;
+    let liveFallbackRunning = false;
+    let liveBrowserRecognition = null;
+
+    function setVoiceFilterMode(mode) {
+      state.voiceFilterMode = mode === 'balanced' ? 'balanced' : 'strict';
+      const isStrict = state.voiceFilterMode === 'strict';
+      const strictBtn = document.getElementById('filter-btn-strict');
+      const balBtn = document.getElementById('filter-btn-balanced');
+      const meter = document.getElementById('voice-filter-meter');
+      if (strictBtn) {
+        strictBtn.className = isStrict
+          ? 'py-2 px-3 rounded-full clay-nav-active text-white text-[11px] font-bold cursor-pointer'
+          : 'py-2 px-3 rounded-full clay-pill-btn text-primary-container text-[11px] font-bold cursor-pointer';
+      }
+      if (balBtn) {
+        balBtn.className = !isStrict
+          ? 'py-2 px-3 rounded-full clay-nav-active text-white text-[11px] font-bold cursor-pointer'
+          : 'py-2 px-3 rounded-full clay-pill-btn text-primary-container text-[11px] font-bold cursor-pointer';
+      }
+      if (meter) {
+        meter.textContent = isStrict ? 'Strict (Noisy / Close Mic)' : 'Balanced (Quiet Room)';
+      }
+      if (state.realtimeWs && state.realtimeWs.readyState === WebSocket.OPEN) {
+        try {
+          state.realtimeWs.send(JSON.stringify({ type: 'update_audio_filter', mode: state.voiceFilterMode }));
+        } catch (e) {}
+      }
+    }
+
+    function createFilteredMicPipeline(rawStream, audioCtx) {
+      const source = audioCtx.createMediaStreamSource(rawStream);
+      // 1. Speech-band filter: High-pass 120 Hz (cuts wind/tractor/fan rumble)
+      const highPass = audioCtx.createBiquadFilter();
+      highPass.type = 'highpass';
+      highPass.frequency.value = 120;
+      highPass.Q.value = 0.707;
+
+      // 2. Low-pass 3800 Hz (cuts high-frequency hiss/insects outside human speech formants)
+      const lowPass = audioCtx.createBiquadFilter();
+      lowPass.type = 'lowpass';
+      lowPass.frequency.value = 3800;
+      lowPass.Q.value = 0.707;
+
+      // 3. Gentle compressor stabilizes close speaker dynamics
+      const compressor = audioCtx.createDynamicsCompressor();
+      compressor.threshold.value = -24;
+      compressor.knee.value = 12;
+      compressor.ratio.value = 3;
+      compressor.attack.value = 0.005;
+      compressor.release.value = 0.12;
+
+      // 4. Filtered MediaStreamDestination for fallback MediaRecorder
+      const filteredDest = audioCtx.createMediaStreamDestination();
+
+      source.connect(highPass);
+      highPass.connect(lowPass);
+      lowPass.connect(compressor);
+      compressor.connect(filteredDest);
+
+      // 5. Adaptive noise-floor + SNR near-field gate state
+      let noiseFloorRms = 0.008;
+      let gateOpen = false;
+      let hangoverUntil = 0;
+      const preRoll = [];
+      const MAX_PREROLL_FRAMES = 2; // ~170ms at 2048 samples / 24kHz
+      const silentGain = audioCtx.createGain();
+      silentGain.gain.value = 0;
+      silentGain.connect(audioCtx.destination);
+
+      return {
+        source,
+        compressor,
+        filteredStream: filteredDest.stream,
+        silentGain,
+        processFrame(inputData) {
+          let sum = 0;
+          for (let i = 0; i < inputData.length; i++) {
+            sum += inputData[i] * inputData[i];
+          }
+          const rms = Math.sqrt(sum / inputData.length);
+          const isStrict = state.voiceFilterMode === 'strict';
+          const palSpeakingBoost = liveActiveSources.length > 0 ? 1.45 : 1.0;
+          const snrMult = (isStrict ? 2.8 : 2.0) * palSpeakingBoost;
+          const absFloor = (isStrict ? 0.014 : 0.008) * palSpeakingBoost;
+          const openThresh = Math.max(absFloor, noiseFloorRms * snrMult);
+          const closeThresh = openThresh * 0.72;
+          const now = performance.now();
+
+          if (rms >= openThresh) {
+            gateOpen = true;
+            hangoverUntil = now + 280;
+          } else if (gateOpen && rms >= closeThresh) {
+            hangoverUntil = now + 220;
+          } else if (gateOpen && now > hangoverUntil) {
+            gateOpen = false;
+          }
+
+          if (!gateOpen) {
+            // Track rolling ambient background floor smoothly
+            noiseFloorRms = Math.min(0.06, Math.max(0.003, noiseFloorRms * 0.96 + rms * 0.04));
+            preRoll.push(new Float32Array(inputData));
+            if (preRoll.length > MAX_PREROLL_FRAMES) preRoll.shift();
+            return {
+              passed: false,
+              ambientDetected: rms > 0.006,
+              frames: [new Float32Array(inputData.length)], // digital silence
+            };
+          }
+
+          const outFrames = [];
+          if (preRoll.length > 0) {
+            while (preRoll.length > 0) outFrames.push(preRoll.shift());
+          }
+          outFrames.push(inputData);
+          return {
+            passed: true,
+            ambientDetected: false,
+            frames: outFrames,
+          };
+        },
+        disconnect() {
+          try { source.disconnect(); } catch (e) {}
+          try { highPass.disconnect(); } catch (e) {}
+          try { lowPass.disconnect(); } catch (e) {}
+          try { compressor.disconnect(); } catch (e) {}
+          try { filteredDest.disconnect(); } catch (e) {}
+          try { silentGain.disconnect(); } catch (e) {}
+        },
+      };
+    }
+
+    function stopPalAudioPlayback() {
+      liveActiveSources.forEach(src => {
+        try { src.stop(); } catch (e) {}
+      });
+      liveActiveSources = [];
+      if (liveAudioCtx) {
+        liveNextPlayTime = liveAudioCtx.currentTime;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    }
+
+    function playPcm16Base64Delta(base64Delta) {
+      if (!liveAudioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        liveAudioCtx = new AudioContextClass({ sampleRate: 24000 });
+      }
+      if (liveAudioCtx.state === 'suspended') {
+        liveAudioCtx.resume().catch(() => {});
+      }
+      const binary = atob(base64Delta);
+      const numSamples = Math.floor(binary.length / 2);
+      if (numSamples === 0) return;
+
+      const float32 = new Float32Array(numSamples);
+      for (let i = 0; i < numSamples; i++) {
+        const lo = binary.charCodeAt(i * 2);
+        const hi = binary.charCodeAt(i * 2 + 1);
+        let int16 = (hi << 8) | lo;
+        if (int16 >= 0x8000) int16 -= 0x10000;
+        float32[i] = int16 / 32768.0;
+      }
+
+      const audioBuffer = liveAudioCtx.createBuffer(1, numSamples, 24000);
+      audioBuffer.getChannelData(0).set(float32);
+
+      const src = liveAudioCtx.createBufferSource();
+      src.buffer = audioBuffer;
+      src.connect(liveAudioCtx.destination);
+
+      const now = liveAudioCtx.currentTime;
+      if (liveNextPlayTime < now) {
+        liveNextPlayTime = now + 0.02;
+      }
+      src.start(liveNextPlayTime);
+      liveNextPlayTime += audioBuffer.duration;
+      liveActiveSources.push(src);
+      src.onended = () => {
+        liveActiveSources = liveActiveSources.filter(s => s !== src);
+        if (liveActiveSources.length === 0) {
+          liveEchoTailUntil = Date.now() + 280;
+          if (state.isListening) {
+            liveSubMode = 'listening';
+            setListeningIndicator('listening');
+          }
+        }
+      };
+    }
+
+    function float32ToPcm16Base64(float32Array) {
+      const pcm16 = new Int16Array(float32Array.length);
+      for (let i = 0; i < float32Array.length; i++) {
+        const s = Math.max(-1, Math.min(1, float32Array[i]));
+        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      const bytes = new Uint8Array(pcm16.buffer);
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+      }
+      return btoa(binary);
+    }
+
+    function setEarthVisualActive(active) {
+      const earthBtn = document.getElementById('earthVoiceBtn');
+      const spinLand = document.getElementById('spinLand');
+      const spinClouds = document.getElementById('spinClouds');
+      const haloContainer = document.getElementById('haloContainer');
+      const voiceBtnLabel = document.getElementById('voiceBtnLabel');
+      const voiceWaveIndicator = document.getElementById('voiceWaveIndicator');
+      const wsBtn = document.getElementById('btn-realtime-ws');
+
+      if (active) {
+        spinLand.style.animationPlayState = 'running';
+        spinClouds.style.animationPlayState = 'running';
+        earthBtn.classList.add('is-pressing');
+        haloContainer.classList.add('active-pulse');
+        voiceWaveIndicator.classList.remove('hidden');
+        voiceWaveIndicator.classList.add('flex');
+        voiceBtnLabel.textContent = state.language === 'ms' ? 'Ketik untuk tamat' : 'Tap to end live';
+        voiceBtnLabel.classList.add('text-emerald-200');
+        if (wsBtn) wsBtn.textContent = 'End Live WS';
+      } else {
+        spinLand.style.animationPlayState = 'paused';
+        spinClouds.style.animationPlayState = 'paused';
+        earthBtn.classList.remove('is-pressing');
+        haloContainer.classList.remove('active-pulse');
+        voiceWaveIndicator.classList.add('hidden');
+        voiceWaveIndicator.classList.remove('flex');
+        voiceBtnLabel.textContent = state.language === 'ms' ? 'Ketik untuk bual' : 'Tap for live chat';
+        voiceBtnLabel.classList.remove('text-emerald-200');
+        if (wsBtn) wsBtn.textContent = 'Live WS';
+      }
+    }
+
+    async function startFallbackContinuousTurnLoop(stream) {
+      // Automatic VAD turn-by-turn fallback if Realtime WebSocket is unavailable
+      if (!state.isListening || !stream || liveFallbackRunning) return;
+      liveFallbackRunning = true;
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!liveAudioCtx) liveAudioCtx = new AudioContextClass();
+      if (!liveFilterGraph) {
+        liveFilterGraph = createFilteredMicPipeline(stream, liveAudioCtx);
+      }
+      const targetStream = liveFilterGraph.filteredStream || stream;
+      const analyser = liveAudioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      liveFilterGraph.compressor.connect(analyser);
+      const dataArr = new Float32Array(analyser.fftSize);
+
+      let speaking = false;
+      let silenceStart = 0;
+      let recorder = null;
+      let chunks = [];
+      let busyTurn = false;
+
+      const startSegmentRecorder = () => {
+        if (!state.isListening || busyTurn) return;
+        chunks = [];
+        recorder = new MediaRecorder(targetStream);
+        recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        recorder.onstop = async () => {
+          if (!state.isListening) return;
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          if (blob.size < 400) {
+            busyTurn = false;
+            return;
+          }
+          busyTurn = true;
+          liveSubMode = 'processing';
+          setListeningIndicator('processing');
+          try {
+            const form = new FormData();
+            form.append('audio', blob, 'utterance.webm');
+            form.append('farm_id', state.farmId);
+            form.append('session_id', state.sessionId);
+            form.append('language', state.language);
+            if (state.currentQuestionId) form.append('current_question_id', state.currentQuestionId);
+            form.append('include_tts', 'true');
+            const res = await fetch('/api/voice/turn', {
+              method: 'POST',
+              headers: authHeaders(),
+              body: form,
+            });
+            if (res.ok) {
+              const turn = await res.json();
+              renderVoiceTurn(turn);
+            }
+          } catch (err) {}
+          busyTurn = false;
+          if (state.isListening) {
+            liveSubMode = 'listening';
+            setListeningIndicator('listening');
+          }
+        };
+        recorder.start();
+      };
+
+      const checkVad = () => {
+        if (!state.isListening) return;
+        const palBusyOrEcho = liveSubMode === 'speaking_pal' || liveActiveSources.length > 0 || Date.now() < liveEchoTailUntil;
+        if (!busyTurn && !palBusyOrEcho) {
+          analyser.getFloatTimeDomainData(dataArr);
+          const gated = liveFilterGraph.processFrame(dataArr);
+
+          if (gated.passed) {
+            if (!speaking) {
+              speaking = true;
+              liveSubMode = 'speaking_user';
+              setListeningIndicator('speaking_user');
+              startSegmentRecorder();
+            }
+            silenceStart = Date.now();
+          } else {
+            if (!speaking && gated.ambientDetected && liveSubMode === 'listening') {
+              setListeningIndicator('ambient_filtered');
+            }
+            if (speaking && Date.now() - silenceStart > 1100) {
+              speaking = false;
+              if (recorder && recorder.state !== 'inactive') {
+                recorder.stop();
+              }
+            }
+          }
+        }
+        if (state.isListening) requestAnimationFrame(checkVad);
+      };
+      requestAnimationFrame(checkVad);
+    }
+
+    async function startLiveConversation() {
+      if (state.isListening) return;
+      state.isListening = true;
+      liveElapsedSec = 0;
+      liveSubMode = 'listening';
+      if (state.farmCardOpen) toggleFarmSelectionCard();
+
+      setEarthVisualActive(true);
+      setListeningIndicator(
+        'listening',
+        state.language === 'ms'
+          ? 'Perbualan langsung (0:00) • Bercakap bila-bila masa'
+          : 'Live conversation (0:00) • Speak anytime'
+      );
+
+      clearInterval(liveTimerInterval);
+      liveTimerInterval = setInterval(() => {
+        if (!state.isListening) return;
+        liveElapsedSec += 1;
+        const mins = Math.floor(liveElapsedSec / 60);
+        const secs = String(liveElapsedSec % 60).padStart(2, '0');
+        if (liveSubMode === 'listening') {
+          setListeningIndicator(
+            'listening',
+            state.language === 'ms'
+              ? `Perbualan langsung (${mins}:${secs}) • Bercakap bila-bila masa`
+              : `Live conversation (${mins}:${secs}) • Speak anytime`
+          );
+        }
+      }, 1000);
+
+      const isStrict = state.voiceFilterMode === 'strict';
+      // In Balanced mode only, use browser SpeechRecognition for instant interim captions;
+      // in Strict mode rely strictly on noise-filtered OpenAI Realtime transcription.
+      const SR = !isStrict ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+      if (SR) {
+        try {
+          liveBrowserRecognition = new SR();
+          liveBrowserRecognition.lang = state.language === 'ms' ? 'ms-MY' : 'en-US';
+          liveBrowserRecognition.interimResults = true;
+          liveBrowserRecognition.continuous = true;
+          liveBrowserRecognition.onend = () => {
+            if (state.isListening && liveBrowserRecognition) {
+              try { liveBrowserRecognition.start(); } catch (e) {}
+            }
+          };
+          liveBrowserRecognition.start();
+        } catch (e) {}
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setListeningIndicator('idle', 'Microphone not supported in this browser');
+        stopLiveConversation();
+        return;
+      }
+
+      try {
+        liveMicStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            sampleRate: 24000,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+      } catch (err) {
+        console.warn('Mic permission error:', err);
+        setListeningIndicator('idle', 'Microphone permission needed');
+        stopLiveConversation();
+        return;
+      }
+
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const tokenQuery = state.accessToken ? `&token=${encodeURIComponent(state.accessToken)}` : '';
+      const wsUrl = `${proto}//${window.location.host}/ws/voice/${encodeURIComponent(state.farmId)}/${encodeURIComponent(state.sessionId)}?language=${state.language}&noise_mode=${encodeURIComponent(state.voiceFilterMode)}${tokenQuery}`;
+      const ws = new WebSocket(wsUrl);
+      state.realtimeWs = ws;
+
+      ws.onopen = () => {
+        try {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          liveAudioCtx = new AudioContextClass({ sampleRate: 24000 });
+          liveNextPlayTime = liveAudioCtx.currentTime;
+          liveFilterGraph = createFilteredMicPipeline(liveMicStream, liveAudioCtx);
+          liveSource = liveFilterGraph.source;
+          liveProcessor = liveAudioCtx.createScriptProcessor(2048, 1, 1);
+
+          liveProcessor.onaudioprocess = ev => {
+            if (!state.isListening || !state.realtimeWs || state.realtimeWs.readyState !== WebSocket.OPEN) return;
+            if (liveSubMode === 'speaking_pal' || liveActiveSources.length > 0 || Date.now() < liveEchoTailUntil) {
+              return;
+            }
+            const inputData = ev.inputBuffer.getChannelData(0);
+            const gated = liveFilterGraph.processFrame(inputData);
+            if (!gated.passed && gated.ambientDetected && liveSubMode === 'listening') {
+              setListeningIndicator('ambient_filtered');
+            }
+            for (const frame of gated.frames) {
+              const b64 = float32ToPcm16Base64(frame);
+              state.realtimeWs.send(JSON.stringify({ type: 'audio_chunk', audio: b64 }));
+            }
+          };
+
+          liveFilterGraph.compressor.connect(liveProcessor);
+          liveProcessor.connect(liveFilterGraph.silentGain);
+        } catch (err) {
+          console.warn('AudioContext stream error, using continuous VAD fallback:', err);
+          startFallbackContinuousTurnLoop(liveMicStream);
+        }
+      };
+
+      let responseUpdatedRotation = false;
+
+      function updateScenarioButtons(scen) {
+        state.scenario = scen || 'normal';
+        ['normal', 'drier', 'wetter'].forEach(s => {
+          const btn = document.getElementById(`scen-${s}`);
+          if (!btn) return;
+          btn.className = s === state.scenario
+            ? 'px-2.5 py-1 rounded-full text-[11px] font-bold clay-nav-active text-white cursor-pointer'
+            : 'px-2.5 py-1 rounded-full text-[11px] font-bold clay-pill-btn text-[#1b4d3e] cursor-pointer';
+        });
+      }
+
+      ws.onmessage = ev => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'speech_started') {
+            if (liveActiveSources.length > 0 || liveSubMode === 'speaking_pal') {
+              return;
+            }
+            stopPalAudioPlayback();
+            document.getElementById('pal-says-text').dataset.streaming = '0';
+            liveSubMode = 'speaking_user';
+            setListeningIndicator('speaking_user');
+          } else if (msg.type === 'speech_stopped') {
+            if (liveActiveSources.length === 0 && liveSubMode !== 'speaking_pal') {
+              liveSubMode = 'processing';
+              setListeningIndicator('processing');
+            }
+          } else if (msg.type === 'response_started') {
+            responseUpdatedRotation = false;
+            document.getElementById('pal-says-text').dataset.streaming = '0';
+            if (liveActiveSources.length === 0) {
+              liveSubMode = 'processing';
+              setListeningIndicator('processing');
+            }
+          } else if (msg.type === 'transcript_delta' && msg.delta) {
+            const el = document.getElementById('pal-says-text');
+            el.textContent = (el.dataset.streaming === '1' ? el.textContent : '') + msg.delta;
+            el.dataset.streaming = '1';
+          } else if (msg.type === 'audio_delta' && msg.delta) {
+            stopPalAudioPlayback();
+            liveSubMode = 'speaking_pal';
+            setListeningIndicator('speaking_pal');
+            playPcm16Base64Delta(msg.delta);
+          } else if (msg.type === 'rotation_updated' && msg.comparison) {
+            responseUpdatedRotation = true;
+            state.comparison = msg.comparison;
+            state.selectedOptionIdx = 0;
+            updateScenarioButtons(msg.comparison.scenario || 'normal');
+            if (Array.isArray(msg.candidate_crops) && msg.candidate_crops.length > 0) {
+              const inp = document.getElementById('custom-crops-input');
+              if (inp) inp.value = msg.candidate_crops.join(', ');
+            }
+            renderRotationDetail();
+            const topOpt = msg.comparison.options?.[0];
+            if (topOpt) {
+              const cropTitle = state.language === 'ms' ? topOpt.name_ms : topOpt.name_en;
+              document.getElementById('reassurance-status-text').textContent =
+                state.language === 'ms'
+                  ? `Cadangan dikemas kini: ${cropTitle} (data NASA POWER)`
+                  : `Suggested updated: ${cropTitle} (NASA POWER data)`;
+            }
+          } else if (msg.type === 'response_done') {
+            const palEl = document.getElementById('pal-says-text');
+            palEl.dataset.streaming = '0';
+            if (!responseUpdatedRotation && palEl.textContent) {
+              syncSuggestedCropFromAssistantText(palEl.textContent);
+            }
+            if (liveActiveSources.length === 0) {
+              liveSubMode = 'listening';
+              setListeningIndicator('listening');
+            }
+          } else if (msg.type === 'pending_confirmation' && (msg.pending_confirmation || msg.data)) {
+            const pendingObj = msg.pending_confirmation || msg.data;
+            document.getElementById('pal-says-text').dataset.streaming = '0';
+            state.pendingConfirmation = pendingObj;
+            if (pendingObj.confirmation_prompt) {
+              document.getElementById('pal-says-text').textContent = pendingObj.confirmation_prompt;
+            }
+            document.getElementById('pending-confirm-box').classList.remove('hidden');
+          } else if (msg.assistant_text) {
+            document.getElementById('pal-says-text').textContent = msg.assistant_text;
+          }
+        } catch (err) {}
+      };
+
+      ws.onerror = () => {
+        if (state.isListening && liveMicStream) {
+          startFallbackContinuousTurnLoop(liveMicStream);
+        }
+      };
+
+      ws.onclose = () => {
+        state.realtimeWs = null;
+        if (state.isListening && liveMicStream) {
+          startFallbackContinuousTurnLoop(liveMicStream);
+        }
+      };
+    }
+
+    function stopLiveConversation() {
+      state.isListening = false;
+      liveFallbackRunning = false;
+      clearInterval(liveTimerInterval);
+      stopPalAudioPlayback();
+
+      if (liveBrowserRecognition) {
+        const rec = liveBrowserRecognition;
+        liveBrowserRecognition = null;
+        try { rec.stop(); } catch (e) {}
+      }
+
+      if (liveProcessor) {
+        try { liveProcessor.disconnect(); } catch (e) {}
+        liveProcessor = null;
+      }
+      if (liveFilterGraph) {
+        liveFilterGraph.disconnect();
+        liveFilterGraph = null;
+      }
+      if (liveSource) {
+        try { liveSource.disconnect(); } catch (e) {}
+        liveSource = null;
+      }
+      if (state.realtimeWs) {
+        try { state.realtimeWs.close(); } catch (e) {}
+        state.realtimeWs = null;
+      }
+      if (liveMicStream) {
+        liveMicStream.getTracks().forEach(t => t.stop());
+        liveMicStream = null;
+      }
+
+      setEarthVisualActive(false);
+      setListeningIndicator('idle');
+    }
+
+    function toggleRealtimeHandsFree() {
+      if (state.isListening) {
+        stopLiveConversation();
+      } else {
+        startLiveConversation();
+      }
+    }
+
+    function setupEarthHoldInteraction() {
+      const earthBtn = document.getElementById('earthVoiceBtn');
+      const voiceBtnLabel = document.getElementById('voiceBtnLabel');
+      if (voiceBtnLabel) {
+        voiceBtnLabel.textContent = state.language === 'ms' ? 'Ketik untuk bual' : 'Tap for live chat';
+      }
+
+      earthBtn.addEventListener('click', e => {
+        e.preventDefault();
+        toggleRealtimeHandsFree();
+      });
+
+      earthBtn.addEventListener('contextmenu', e => e.preventDefault());
+    }
+
+    async function openRotationDetailView() {
+      document.getElementById('pal-hub-wrapper').classList.add('hidden');
+      document.getElementById('screen-records').classList.add('hidden');
+      document.getElementById('screen-settings').classList.add('hidden');
+      const view = document.getElementById('view-rotation-detail');
+      view.classList.remove('hidden');
+      view.classList.add('flex');
+      if (!state.comparison) {
+        await runComparison();
+      } else {
+        renderRotationDetail();
+      }
+    }
+
+    function closeRotationDetailView() {
+      const view = document.getElementById('view-rotation-detail');
+      view.classList.add('hidden');
+      view.classList.remove('flex');
+      document.getElementById('pal-hub-wrapper').classList.remove('hidden');
+    }
+
+    async function changeScenario(scen) {
+      state.scenario = scen;
+      ['normal', 'drier', 'wetter'].forEach(s => {
+        const btn = document.getElementById(`scen-${s}`);
+        if (!btn) return;
+        btn.className = s === scen
+          ? 'px-2.5 py-1 rounded-full text-[11px] font-bold clay-nav-active text-white cursor-pointer'
+          : 'px-2.5 py-1 rounded-full text-[11px] font-bold clay-pill-btn text-[#1b4d3e] cursor-pointer';
+      });
+      await runComparison();
+      notifyRealtimeContextRefresh();
+    }
+
+    function notifyRealtimeContextRefresh() {
+      if (state.realtimeWs && state.realtimeWs.readyState === WebSocket.OPEN) {
+        try {
+          state.realtimeWs.send(JSON.stringify({ type: 'refresh_context' }));
+        } catch (e) {}
+      }
+    }
+
+    async function syncSuggestedCropFromAssistantText(text) {
+      if (!text) return;
+      const lower = String(text).toLowerCase();
+      const cropAliases = [
+        ['kacang tanah', ['kacang tanah', 'groundnut', 'peanut']],
+        ['jagung manis', ['jagung manis', 'jagung', 'sweet corn', 'corn', 'maize']],
+        ['keledek', ['keledek', 'ubi keledek', 'sweet potato']],
+        ['padi sawah', ['padi sawah', 'padi', 'paddy', 'wetland rice', 'rice']],
+        ['betik', ['betik', 'papaya']],
+        ['nanas', ['nanas', 'pineapple']],
+        ['chilli', ['chilli', 'chili', 'cili', 'cabai']],
+      ];
+      const mentioned = [];
+      for (const [canonical, aliases] of cropAliases) {
+        let earliest = -1;
+        for (const a of aliases) {
+          const idx = lower.indexOf(a);
+          if (idx !== -1 && (earliest === -1 || idx < earliest)) earliest = idx;
+        }
+        if (earliest !== -1) mentioned.push({ canonical, pos: earliest });
+      }
+      if (mentioned.length === 0) return;
+
+      // Only override Suggestions order if the agent is actually suggesting/comparing crops
+      const advisoryCue = /(suggest|recommend|consider|option|compare|better fit|good fit|suitable|rotation|cadang|lebih sesuai|pilihan|banding|alternatif|elok cuba)/i.test(lower);
+      if (!advisoryCue) return;
+
+      mentioned.sort((a, b) => a.pos - b.pos);
+      const ordered = mentioned.slice(0, 3).map(m => m.canonical);
+      const inp = document.getElementById('custom-crops-input');
+      if (inp) inp.value = ordered.join(', ');
+      state.selectedOptionIdx = 0;
+      await runComparison(ordered);
+      const topOpt = state.comparison?.options?.[0];
+      if (topOpt) {
+        const cropTitle = state.language === 'ms' ? topOpt.name_ms : topOpt.name_en;
+        document.getElementById('reassurance-status-text').textContent =
+          state.language === 'ms'
+            ? `Cadangan dikemas kini: ${cropTitle} (data NASA POWER)`
+            : `Suggested updated: ${cropTitle} (NASA POWER data)`;
+      }
+    }
+
+    async function runComparison(overrideCrops = null) {
+      const rawVal = document.getElementById('custom-crops-input')?.value?.trim() || '';
+      const rawCrops = Array.isArray(overrideCrops)
+        ? overrideCrops
+        : (rawVal ? rawVal.split(',').map(s => s.trim()).filter(Boolean) : []);
+      try {
+        const res = await fetch('/api/compare', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            farm_id: state.farmId,
+            candidate_crops: rawCrops.length ? rawCrops : null,
+            scenario: state.scenario,
+          }),
+        });
+        state.comparison = await res.json();
+        renderRotationDetail();
+      } catch (e) {
+        console.error('Comparison error:', e);
+      }
+    }
+
+    function selectRotationOption(idx) {
+      state.selectedOptionIdx = idx;
+      renderRotationDetail();
+    }
+
+    function renderDots(level, isRisk = false) {
+      let count = 2;
+      if (!isRisk) {
+        count = level === 'Good' || level === 'High' ? 3 : (level === 'Poor' || level === 'Low' ? 1 : 2);
+      } else {
+        count = level === 'Low' || level === 'Lower' ? 1 : (level === 'High' ? 3 : 2);
+      }
+      const activeCls = isRisk ? 'clay-dot-ochre' : 'clay-dot-active';
+      return [1, 2, 3].map(i =>
+        `<span class="w-5 h-2.5 rounded-full ${i <= count ? activeCls : 'clay-dot-inactive'}"></span>`
+      ).join('');
+    }
+
+    function renderRotationDetail() {
+      if (!state.comparison || !state.comparison.options) return;
+      const isMs = state.language === 'ms';
+      const opts = state.comparison.options;
+      const idx = Math.min(state.selectedOptionIdx, opts.length - 1);
+      const opt = opts[idx];
+      const climate = state.comparison.climate_summary || {};
+      const coverage = state.comparison.evidence_coverage || {};
+      const mkt = opt.market_context || {};
+
+      const cropTitle = isMs ? opt.name_ms : opt.name_en;
+      document.getElementById('rotationSuggestedTitle').textContent = `Suggested → ${cropTitle}`;
+
+      document.getElementById('rotation-option-tabs').innerHTML = opts.map((o, i) => `
+        <button onclick="selectRotationOption(${i})" class="px-3.5 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${i === idx ? 'clay-nav-active text-white' : 'clay-pill-btn text-[#1b4d3e]'}" type="button">
+          ${escapeHtml(isMs ? o.name_ms : o.name_en)}
+        </button>
+      `).join('');
+
+      const waterList = (isMs ? opt.climate_water_fit_ms : opt.climate_water_fit_en) || [];
+      const soilList = (isMs ? opt.soil_rotation_benefit_ms : opt.soil_rotation_benefit_en) || [];
+      const riskList = (isMs ? opt.risks_ms : opt.risks_en) || [];
+      const insights = (isMs ? climate.plain_insights_ms : climate.plain_insights_en) || [];
+
+      const mktBadge = mkt.low_myr
+        ? `RM ${Number(mkt.low_myr).toFixed(2)}–${Number(mkt.high_myr).toFixed(2)}/${escapeHtml(mkt.unit)}`
+        : 'Not checked';
+
+      document.getElementById('rotation-cards-container').innerHTML = `
+        <!-- Card 1: Climate and water fit -->
+        <article class="clay-card rounded-[28px] p-5" data-purpose="climate-water-fit">
+          <div class="flex items-center gap-2.5 mb-3">
+            <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#1b4d3e]">
+              <span class="material-symbols-outlined text-[18px]">water_drop</span>
+            </div>
+            <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Climate and water fit</h3>
+          </div>
+          <div class="flex items-center gap-2.5 mb-3.5 px-0.5">
+            <span class="text-sm font-semibold text-[#1d1b19]">Water fit</span>
+            <div class="flex items-center gap-1.5">
+              ${renderDots(opt.water_fit_level, false)}
+            </div>
+            <span class="text-sm font-bold text-[#1b4d3e] ml-1 px-2.5 py-0.5 rounded-full clay-badge-green text-xs">${escapeHtml(opt.water_fit_level)}</span>
+          </div>
+          <ul class="custom-bullet-list space-y-1.5 text-[14px] text-[#404945]">
+            ${waterList.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+            ${insights.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+          </ul>
+        </article>
+
+        <!-- Card 2: Soil and rotation benefit -->
+        <article class="clay-card rounded-[28px] p-5" data-purpose="soil-rotation-benefit">
+          <div class="flex items-center gap-2.5 mb-3">
+            <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#1b4d3e]">
+              <span class="material-symbols-outlined text-[18px]">psychiatry</span>
+            </div>
+            <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Soil and rotation benefit</h3>
+          </div>
+          <div class="flex items-center gap-2.5 mb-3.5 px-0.5">
+            <span class="text-sm font-semibold text-[#1d1b19]">Soil benefit</span>
+            <div class="flex items-center gap-1.5">
+              ${renderDots(opt.soil_benefit_level, false)}
+            </div>
+            <span class="text-sm font-bold text-[#1b4d3e] ml-1 px-2.5 py-0.5 rounded-full clay-badge-green text-xs">${escapeHtml(opt.soil_benefit_level)}</span>
+          </div>
+          <ul class="custom-bullet-list space-y-1.5 text-[14px] text-[#404945]">
+            ${soilList.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+          </ul>
+        </article>
+
+        <!-- Card 3: Risks -->
+        <article class="clay-card rounded-[28px] p-5" data-purpose="risks">
+          <div class="flex items-center gap-2.5 mb-3">
+            <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#9a5e12]">
+              <span class="material-symbols-outlined text-[18px]">warning</span>
+            </div>
+            <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Risks</h3>
+          </div>
+          <div class="flex items-center gap-2.5 mb-3.5 px-0.5">
+            <span class="text-sm font-semibold text-[#1d1b19]">Risk</span>
+            <div class="flex items-center gap-1.5">
+              ${renderDots(opt.risk_level, true)}
+            </div>
+            <span class="text-sm font-bold text-[#9a5e12] ml-1 px-2.5 py-0.5 rounded-full clay-badge text-xs">${escapeHtml(opt.risk_level === 'Low' ? 'Lower' : opt.risk_level)}</span>
+          </div>
+          <ul class="custom-bullet-list space-y-1.5 text-[14px] text-[#404945]">
+            ${riskList.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+          </ul>
+        </article>
+
+        <!-- Card 4: Missing information -->
+        <article class="clay-card rounded-[28px] p-5" data-purpose="missing-information">
+          <div class="flex items-center gap-2.5 mb-3.5">
+            <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#404945]">
+              <span class="material-symbols-outlined text-[18px]">help</span>
+            </div>
+            <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Missing information</h3>
+          </div>
+          <div class="space-y-3 mb-2 text-[14px]">
+            <div class="flex items-center justify-between p-2 rounded-xl bg-[#f5eee7]/60">
+              <span class="text-[#1d1b19] font-medium">Soil pH</span>
+              <span class="px-3 py-1 clay-badge text-[#404945] rounded-full text-xs font-bold">${escapeHtml(coverage.soil_ph || 'Unknown')}</span>
+            </div>
+            <div class="flex items-center justify-between p-2 rounded-xl bg-[#f5eee7]/60">
+              <span class="text-[#1d1b19] font-medium">Water in dry weeks</span>
+              <span class="px-3 py-1 clay-badge text-[#404945] rounded-full text-xs font-bold">${escapeHtml(coverage.water_source || 'Unknown')}</span>
+            </div>
+            <div class="flex items-center justify-between p-2 rounded-xl bg-[#f5eee7]/60">
+              <span class="text-[#1d1b19] font-medium">${escapeHtml(cropTitle)} market price</span>
+              <span class="px-3 py-1 clay-badge text-[#404945] rounded-full text-xs font-bold">${mktBadge}</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Card 5: Before you decide -->
+        <article class="clay-card rounded-[28px] p-5" data-purpose="before-you-decide">
+          <div class="flex items-center gap-2.5 mb-2.5">
+            <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#1b4d3e]">
+              <span class="material-symbols-outlined text-[18px]">task_alt</span>
+            </div>
+            <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Before you decide</h3>
+          </div>
+          <p class="text-[14px] text-[#1d1b19] font-medium leading-snug">${escapeHtml(isMs ? opt.farmer_action_ms : opt.farmer_action_en)}</p>
+          <p class="text-[12px] text-[#707974] mt-2">${escapeHtml(isMs ? (mkt.disclaimer_ms || '') : (mkt.disclaimer_en || ''))}</p>
+        </article>
+
+        <!-- Card 6: Why this result? -->
+        <details class="clay-card rounded-[28px] p-5" data-purpose="why-this-result">
+          <summary class="font-bold text-[17px] text-[#1d1b19] tracking-tight cursor-pointer flex items-center justify-between">
+            <span>Why this result?</span>
+            <span class="material-symbols-outlined text-[20px]">expand_more</span>
+          </summary>
+          <div class="mt-3 pt-3 border-t border-[#e2d7ce] space-y-2 text-[13px] text-[#404945]">
+            <p>${escapeHtml(isMs ? opt.summary_sentence_ms : opt.summary_sentence_en)}</p>
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              ${Object.entries(coverage).map(([k, v]) =>
+                `<span class="px-2.5 py-0.5 rounded-full clay-badge text-[11px] font-bold">${escapeHtml(k)}: ${escapeHtml(v)}</span>`
+              ).join('')}
+            </div>
+          </div>
+        </details>
+      `;
+    }
+
+    function listenToRotationSummary() {
+      if (!state.comparison || !state.comparison.options) return;
+      const isMs = state.language === 'ms';
+      const opt = state.comparison.options[state.selectedOptionIdx] || state.comparison.options[0];
+      const text = isMs ? opt.summary_sentence_ms : opt.summary_sentence_en;
+      if (!text || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = isMs ? 'ms-MY' : 'en-US';
+      window.speechSynthesis.speak(u);
+    }
+
+    async function openRecordsView() {
+      try {
+        const res = await fetch(`/api/farms/${encodeURIComponent(state.farmId)}`, { headers: authHeaders() });
+        const farm = await res.json();
+        const cropsHtml = (farm.crop_history || []).map(c =>
+          `<li>${escapeHtml(c.raw_crop_name)} <span class="px-2 py-0.5 rounded-full clay-badge text-[10px] font-bold">${escapeHtml(c.evidence_label)}</span></li>`
+        ).join('') || '<li>No crop history confirmed yet.</li>';
+        const obsHtml = (farm.field_observations || []).map(o =>
+          `<li><strong>${escapeHtml(o.event_type)}</strong> (${escapeHtml(o.zone)}): ${escapeHtml(o.observation)}</li>`
+        ).join('') || '<li>No field observations confirmed yet.</li>';
+        document.getElementById('records-memory-container').innerHTML = `
+          <article class="clay-card rounded-[28px] p-5 space-y-2">
+            <h3 class="font-bold text-[16px] text-[#1d1b19]">Plot Profile (${escapeHtml(farm.farm_id)})</h3>
+            <p class="text-sm text-[#404945]">Irrigation: <b>${escapeHtml(farm.irrigation_availability?.value)}</b> (${escapeHtml(farm.irrigation_availability?.evidence_label)})</p>
+            <p class="text-sm text-[#404945]">Soil Feel: <b>${escapeHtml(farm.soil?.texture_feel?.value)}</b> (${escapeHtml(farm.soil?.texture_feel?.evidence_label)})</p>
+            <p class="text-sm text-[#404945]">Waterlogging: <b>${escapeHtml(farm.soil?.waterlogging_duration?.value)}</b> (${escapeHtml(farm.soil?.waterlogging_duration?.evidence_label)})</p>
+          </article>
+          <article class="clay-card rounded-[28px] p-5 space-y-2">
+            <h3 class="font-bold text-[16px] text-[#1d1b19]">Crop History</h3>
+            <ul class="custom-bullet-list text-sm text-[#404945] space-y-1">${cropsHtml}</ul>
+          </article>
+          <article class="clay-card rounded-[28px] p-5 space-y-2">
+            <h3 class="font-bold text-[16px] text-[#1d1b19]">Field Observations</h3>
+            <ul class="custom-bullet-list text-sm text-[#404945] space-y-1">${obsHtml}</ul>
+          </article>
+        `;
+      } catch (e) {}
+    }
+
+    function highlightDistrictElement(districtId, locality, lat, lon) {
+      document.querySelectorAll('#kedah-district-map .kedah-district-shape').forEach(el => {
+        el.classList.toggle('active', el.dataset.districtId === districtId);
+      });
+      document.querySelectorAll('#kedah-district-map .kedah-district-label').forEach(lbl => {
+        const matches = lbl.id === `lbl-${districtId}` || lbl.id === `lbl-${districtId}-2`;
+        lbl.classList.toggle('active', matches);
+      });
+      const badge = document.getElementById('selected-district-badge');
+      const coords = document.getElementById('selected-district-coords');
+      if (badge) badge.textContent = locality || 'Sungai Petani, Kedah';
+      if (coords) {
+        const latNum = Number(lat);
+        const lonNum = Number(lon);
+        coords.textContent = Number.isFinite(latNum) && Number.isFinite(lonNum)
+          ? `${latNum.toFixed(4)}, ${lonNum.toFixed(4)}`
+          : '';
+      }
+    }
+
+    function syncDistrictMapFromLocality(locality, lat, lon) {
+      const locLower = String(locality || '').toLowerCase();
+      let matchedEl = null;
+      const shapes = Array.from(document.querySelectorAll('#kedah-district-map .kedah-district-shape'));
+      for (const el of shapes) {
+        const dId = (el.dataset.districtId || '').replace('_', ' ');
+        const dLoc = (el.dataset.locality || '').toLowerCase();
+        if (
+          (dId && locLower.includes(dId))
+          || (dLoc && locLower.includes(dLoc.split(',')[0]))
+          || (el.dataset.districtId === 'kuala_muda' && locLower.includes('sungai petani'))
+        ) {
+          matchedEl = el;
+          break;
+        }
+      }
+      if (matchedEl) {
+        highlightDistrictElement(
+          matchedEl.dataset.districtId,
+          locality || matchedEl.dataset.locality,
+          lat ?? matchedEl.dataset.lat,
+          lon ?? matchedEl.dataset.lon
+        );
+      } else {
+        highlightDistrictElement('', locality || 'Custom Location', lat, lon);
+      }
+    }
+
+    async function selectDistrictFromMap(el) {
+      if (!el) return;
+      const districtId = el.dataset.districtId;
+      const locality = el.dataset.locality;
+      const lat = el.dataset.lat;
+      const lon = el.dataset.lon;
+
+      document.getElementById('settings-locality').value = locality;
+      document.getElementById('settings-lat').value = lat;
+      document.getElementById('settings-lon').value = lon;
+      highlightDistrictElement(districtId, locality, lat, lon);
+
+      await saveLocationFromSettings();
+      const statusEl = document.getElementById('district-save-status');
+      if (statusEl) {
+        statusEl.textContent = state.language === 'ms' ? 'Disimpan' : 'Saved';
+        statusEl.classList.remove('hidden');
+        setTimeout(() => statusEl.classList.add('hidden'), 1800);
+      }
+    }
+
+    async function saveLocationFromSettings() {
+      const locality = document.getElementById('settings-locality').value.trim() || 'Sungai Petani, Kedah';
+      const latVal = parseFloat(document.getElementById('settings-lat').value);
+      const lonVal = parseFloat(document.getElementById('settings-lon').value);
+      syncDistrictMapFromLocality(
+        locality,
+        Number.isFinite(latVal) ? latVal : null,
+        Number.isFinite(lonVal) ? lonVal : null
+      );
+      await fetch(`/api/farms/${encodeURIComponent(state.farmId)}/location`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          locality,
+          latitude: Number.isFinite(latVal) ? latVal : null,
+          longitude: Number.isFinite(lonVal) ? lonVal : null,
+        }),
+      });
+      await runComparison();
+      notifyRealtimeContextRefresh();
+    }
+
+    function useBrowserGps() {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(pos => {
+        document.getElementById('settings-lat').value = pos.coords.latitude.toFixed(4);
+        document.getElementById('settings-lon').value = pos.coords.longitude.toFixed(4);
+        saveLocationFromSettings();
+      });
+    }
+
+    async function exportCurrentFarm() {
+      const res = await fetch(`/api/farms/${encodeURIComponent(state.farmId)}/export`, {
+        headers: authHeaders(),
+      });
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${state.farmId}_memory_export.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function deleteCurrentFarm() {
+      await fetch(`/api/farms/${encodeURIComponent(state.farmId)}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      await selectFarm('green_valley_plot', false);
+      switchTopTab('pal');
+    }
+
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>
