@@ -618,19 +618,117 @@ def test_local_guest_mode_allows_running_without_login_and_enforces_auth_on_verc
     assert dummy_rt.seen_store is guest_store
     assert dummy_rt.seen_token is None
 
-    # On Vercel, auth must remain strictly required
-    monkeypatch.setattr(main_mod, "_is_vercel", True)
+    # When ALLOW_LOCAL_GUEST is disabled, auth must remain strictly required
+    monkeypatch.setenv("ALLOW_LOCAL_GUEST", "false")
     assert client.get("/api/config").json()["allow_local_guest"] is False
     assert client.get("/api/farms").status_code == 401
     try:
         with client.websocket_connect("/ws/voice/guest_plot_1/sess_guest_ws?language=ms"):
-            raise AssertionError("Expected WebSocketDisconnect without token on Vercel")
+            raise AssertionError("Expected WebSocketDisconnect without token when ALLOW_LOCAL_GUEST=false")
     except WebSocketDisconnect as exc:
         assert exc.code == 1008
 
     html = Path("nasa/static/index.html").read_text(encoding="utf-8")
     assert "allow_local_guest" in html
     assert "enterApp" in html
+    assert "startDirectOpenAIRealtime" in html
+    assert "/api/voice/realtime-session" in html
+    assert "/api/voice/realtime-tool" in html
+
+
+def test_vercel_serverless_realtime_session_tools_and_stateless_confirm(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    import main as main_mod
+    from services.climate_service import NasaPowerClimateService
+    from services.memory_store import MemoryStore
+    from services.realtime_voice import OpenAIRealtimeService
+
+    store = MemoryStore(storage_dir=tmp_path / "vercel_store")
+    rt = OpenAIRealtimeService(climate_service=NasaPowerClimateService(cache_dir=Path("nasa/storage/climate_cache")))
+
+    async def fake_create_ephemeral_session(**kwargs):
+        sess = rt.build_session_config(**kwargs, allow_network=False)
+        return {"ephemeral_key": "ek_test_vercel_123", "model": rt.model, "session": sess}
+
+    monkeypatch.setattr(rt, "create_ephemeral_session", fake_create_ephemeral_session)
+    monkeypatch.setattr(main_mod, "memory_store", store)
+    monkeypatch.setattr(main_mod, "local_memory_store", store)
+    monkeypatch.setattr(main_mod, "_is_vercel", True)
+    monkeypatch.setattr(main_mod, "_has_real_openai", lambda: True)
+    monkeypatch.setattr(main_mod, "get_realtime_service", lambda: rt)
+    monkeypatch.setenv("NASA_POWER_ALLOW_NETWORK", "false")
+
+    client = TestClient(main_mod.app)
+
+    cfg = client.get("/api/config").json()
+    assert cfg["serverless"] is True
+
+    # 1. Mint ephemeral Realtime session over HTTP (used by browser on Vercel)
+    sess_res = client.post(
+        "/api/voice/realtime-session",
+        json={"farm_id": "vercel_farm_1", "session_id": "sess_v1", "language": "ms", "noise_mode": "strict"},
+    )
+    assert sess_res.status_code == 200
+    sess_json = sess_res.json()
+    assert sess_json["ephemeral_key"] == "ek_test_vercel_123"
+    assert "LIVE NASA POWER & PLOT SNAPSHOT" in sess_json["session"]["instructions"]
+    assert len(sess_json["session"]["tools"]) == 2
+
+    # 2. Execute get_nasa_climate_and_rotation tool over HTTP
+    rot_tool_res = client.post(
+        "/api/voice/realtime-tool",
+        json={
+            "farm_id": "vercel_farm_1",
+            "session_id": "sess_v1",
+            "tool_name": "get_nasa_climate_and_rotation",
+            "arguments": {"scenario": "drier", "suggested_crop": "kacang tanah", "candidate_crops": ["kacang tanah", "jagung manis"]},
+        },
+    )
+    assert rot_tool_res.status_code == 200
+    rot_payload = rot_tool_res.json()
+    assert rot_payload["event"]["type"] == "rotation_updated"
+    assert rot_payload["event"]["comparison"]["scenario"] == "drier"
+
+    # 3. Execute propose_farm_fact tool over HTTP
+    fact_tool_res = client.post(
+        "/api/voice/realtime-tool",
+        json={
+            "farm_id": "vercel_farm_1",
+            "session_id": "sess_v1",
+            "tool_name": "propose_farm_fact",
+            "arguments": {
+                "target_field": "irrigation_availability",
+                "proposed_value": "always",
+                "human_label": "Ada pengairan",
+                "confirmation_prompt": "Ada pengairan sepanjang musim, betul?",
+            },
+        },
+    )
+    assert fact_tool_res.status_code == 200
+    fact_event = fact_tool_res.json()["event"]
+    assert fact_event["type"] == "pending_confirmation"
+    pending_obj = fact_event["pending_confirmation"]
+
+    # Simulate Vercel stateless cold instance by clearing in-memory _pending before confirm
+    store._pending.clear()
+
+    confirm_res = client.post(
+        "/api/voice/confirm",
+        json={
+            "farm_id": "vercel_farm_1",
+            "session_id": "sess_v1",
+            "confirmation_id": pending_obj["confirmation_id"],
+            "accepted": True,
+            "language": "ms",
+            "target_field": pending_obj["target_field"],
+            "proposed_value": pending_obj["proposed_value"],
+            "human_label": pending_obj["human_label"],
+            "confirmation_prompt": pending_obj["confirmation_prompt"],
+        },
+    )
+    assert confirm_res.status_code == 200
+    assert confirm_res.json()["saved"] is True
+    assert confirm_res.json()["farm_memory"]["irrigation_availability"]["value"] == "always"
 
 
 

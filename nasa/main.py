@@ -1,4 +1,5 @@
 import os
+import shutil
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Optional
@@ -82,6 +83,17 @@ libraries = LibraryStore(BASE_DIR / "data")
 _is_vercel = bool(os.getenv("VERCEL"))
 _climate_cache_dir = Path("/tmp/petanipal_climate_cache") if _is_vercel else (BASE_DIR / "storage" / "climate_cache")
 _farm_memory_dir = Path("/tmp/petanipal_farm_memories") if _is_vercel else (BASE_DIR / "data" / "farm_memories")
+if _is_vercel:
+    _climate_cache_dir.mkdir(parents=True, exist_ok=True)
+    for _src in (BASE_DIR / "storage" / "climate_cache").glob("*.json"):
+        _dst = _climate_cache_dir / _src.name
+        if not _dst.exists():
+            shutil.copy2(_src, _dst)
+    _farm_memory_dir.mkdir(parents=True, exist_ok=True)
+    for _src in (BASE_DIR / "data" / "farm_memories").glob("*.json"):
+        _dst = _farm_memory_dir / _src.name
+        if not _dst.exists():
+            shutil.copy2(_src, _dst)
 climate_service = NasaPowerClimateService(cache_dir=_climate_cache_dir)
 use_supabase = _has_real_supabase()
 local_memory_store = MemoryStore(storage_dir=_farm_memory_dir)
@@ -92,7 +104,7 @@ _voice_service: Optional[OpenAIVoiceService] = None
 
 
 def _allow_local_guest() -> bool:
-    return (not _is_vercel) and os.getenv("ALLOW_LOCAL_GUEST", "true").lower() == "true"
+    return os.getenv("ALLOW_LOCAL_GUEST", "true").lower() == "true"
 
 
 def _store_for(access_token: Optional[str]) -> MemoryStore | SupabaseMemoryStore:
@@ -114,6 +126,21 @@ class CompareRequest(BaseModel):
     farm_id: str
     candidate_crops: Optional[list[str]] = None
     scenario: str = "normal"
+
+
+class RealtimeSessionRequest(BaseModel):
+    farm_id: str
+    session_id: str
+    language: LanguageCode = LanguageCode.MS
+    noise_mode: str = "strict"
+    refresh_only: bool = False
+
+
+class RealtimeToolRequest(BaseModel):
+    farm_id: str
+    session_id: str
+    tool_name: str
+    arguments: dict[str, Any] = {}
 
 
 def get_auth_context(
@@ -284,6 +311,7 @@ def get_public_config_sync() -> dict[str, Any]:
         "supabase_anon_key": os.getenv("SUPABASE_ANON_KEY", os.getenv("SUPABASE_KEY", "")) if _has_real_supabase() else "",
         "supabase_enabled": isinstance(memory_store, SupabaseMemoryStore),
         "allow_local_guest": _allow_local_guest(),
+        "serverless": _is_vercel,
         "openai_configured": _has_real_openai(),
         "realtime_model": os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime-2.1-mini"),
     }
@@ -547,6 +575,14 @@ async def confirm_fact(
     user_id, access_token = auth
     store = _store_for(access_token)
     pending = store.pop_pending(payload.session_id, payload.confirmation_id)
+    if pending is None and payload.target_field:
+        pending = PendingConfirmation(
+            confirmation_id=payload.confirmation_id,
+            target_field=payload.target_field,
+            proposed_value=payload.proposed_value,
+            human_label=payload.human_label or str(payload.proposed_value or ""),
+            confirmation_prompt=payload.confirmation_prompt or "",
+        )
     if pending is None:
         raise HTTPException(status_code=404, detail="Pending confirmation not found or already handled.")
 
@@ -568,6 +604,58 @@ async def confirm_fact(
         "farm_memory": farm,
         "next_question": next_q,
     }
+
+
+@app.post("/api/voice/realtime-session")
+async def create_realtime_session(
+    payload: RealtimeSessionRequest,
+    auth: Annotated[tuple[Optional[str], Optional[str]], Depends(get_auth_context)],
+) -> dict[str, Any]:
+    """Mint an OpenAI Realtime ephemeral key and full session config for serverless/browser clients."""
+    user_id, access_token = auth
+    store = _store_for(access_token)
+    realtime = get_realtime_service()
+    if payload.refresh_only:
+        session_cfg = realtime.build_session_config(
+            language=payload.language,
+            libraries=libraries,
+            memory_store=store,
+            farm_id=payload.farm_id,
+            user_id=user_id,
+            access_token=access_token,
+            noise_mode=payload.noise_mode,
+        )
+        return {"model": realtime.model, "session": session_cfg}
+    return await realtime.create_ephemeral_session(
+        language=payload.language,
+        libraries=libraries,
+        memory_store=store,
+        farm_id=payload.farm_id,
+        user_id=user_id,
+        access_token=access_token,
+        noise_mode=payload.noise_mode,
+    )
+
+
+@app.post("/api/voice/realtime-tool")
+async def execute_realtime_tool_endpoint(
+    payload: RealtimeToolRequest,
+    auth: Annotated[tuple[Optional[str], Optional[str]], Depends(get_auth_context)],
+) -> dict[str, Any]:
+    """Execute a Realtime tool call (`propose_farm_fact` or `get_nasa_climate_and_rotation`) over HTTP."""
+    user_id, access_token = auth
+    store = _store_for(access_token)
+    realtime = get_realtime_service()
+    return realtime.execute_realtime_tool(
+        tool_name=payload.tool_name,
+        arguments=payload.arguments,
+        farm_id=payload.farm_id,
+        session_id=payload.session_id,
+        libraries=libraries,
+        memory_store=store,
+        user_id=user_id,
+        access_token=access_token,
+    )
 
 
 @app.websocket("/ws/voice/{farm_id}/{session_id}")

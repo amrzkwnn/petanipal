@@ -5,7 +5,8 @@ import os
 import uuid
 from typing import Any
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import HTTPException, WebSocket, WebSocketDisconnect
+import httpx
 from openai import AsyncOpenAI
 
 from schemas import LanguageCode, PendingConfirmation
@@ -190,6 +191,227 @@ class OpenAIRealtimeService:
             f"Reviewed Crop Library: {json.dumps(crops, ensure_ascii=False)}"
         )
 
+    @staticmethod
+    def _realtime_tools() -> list[dict[str, Any]]:
+        return [
+            {
+                "type": "function",
+                "name": "propose_farm_fact",
+                "description": "Propose a farmer-stated fact for read-back confirmation before saving to FarmMemory.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target_field": {"type": "string"},
+                        "proposed_value": {"type": "string"},
+                        "human_label": {"type": "string"},
+                        "confirmation_prompt": {"type": "string"},
+                        "zone": {"type": "string"},
+                        "event_type": {"type": "string"},
+                        "affected_crop": {"type": "string"},
+                        "timing_or_duration": {"type": "string"},
+                    },
+                    "required": ["target_field", "proposed_value", "human_label", "confirmation_prompt"],
+                },
+            },
+            {
+                "type": "function",
+                "name": "get_nasa_climate_and_rotation",
+                "description": "Fetch NASA POWER climate summary and crop rotation trade-offs for this farm, and update the app UI's 'Suggested Crop' and 'Rotation detail' cards to match your spoken suggestion.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "suggested_crop": {
+                            "type": "string",
+                            "description": "Your #1 suggested crop name or crop_id (e.g. 'kacang tanah', 'jagung manis', 'keledek', 'chilli', 'padi', 'betik', 'nanas') to feature in the UI header.",
+                        },
+                        "scenario": {
+                            "type": "string",
+                            "enum": ["normal", "drier", "wetter"],
+                            "description": "What-if seasonal rainfall sensitivity scenario.",
+                        },
+                        "candidate_crops": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Up to 3 crop names to compare in order of suitability.",
+                        },
+                    },
+                    "required": ["scenario"],
+                },
+            },
+        ]
+
+    def build_session_config(
+        self,
+        language: LanguageCode,
+        libraries: LibraryStore,
+        memory_store: Any,
+        farm_id: str,
+        user_id: str | None = None,
+        access_token: str | None = None,
+        noise_mode: str = "strict",
+        allow_network: bool | None = None,
+    ) -> dict[str, Any]:
+        instructions = self._build_instructions(
+            language,
+            libraries,
+            memory_store,
+            farm_id,
+            user_id=user_id,
+            access_token=access_token,
+            allow_network=allow_network,
+        )
+        return {
+            "type": "realtime",
+            "model": self.model,
+            "instructions": instructions,
+            "audio": {
+                "input": _audio_input_config(language, noise_mode),
+                "output": {"voice": self.voice},
+            },
+            "tools": self._realtime_tools(),
+        }
+
+    async def create_ephemeral_session(
+        self,
+        *,
+        language: LanguageCode,
+        libraries: LibraryStore,
+        memory_store: Any,
+        farm_id: str,
+        user_id: str | None = None,
+        access_token: str | None = None,
+        noise_mode: str = "strict",
+        allow_network: bool | None = None,
+    ) -> dict[str, Any]:
+        session_cfg = self.build_session_config(
+            language=language,
+            libraries=libraries,
+            memory_store=memory_store,
+            farm_id=farm_id,
+            user_id=user_id,
+            access_token=access_token,
+            noise_mode=noise_mode,
+            allow_network=allow_network,
+        )
+        api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+        if not api_key:
+            raise HTTPException(status_code=503, detail="OPENAI_API_KEY is not configured.")
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/realtime/client_secrets",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"session": {"type": "realtime", "model": self.model}},
+            )
+            if resp.status_code >= 400:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Failed to create OpenAI Realtime ephemeral session ({resp.status_code}).",
+                )
+            data = resp.json()
+        ephemeral_key = data.get("value") or (data.get("client_secret") or {}).get("value")
+        if not ephemeral_key:
+            raise HTTPException(status_code=502, detail="No ephemeral key returned by OpenAI Realtime.")
+        return {
+            "ephemeral_key": ephemeral_key,
+            "model": self.model,
+            "session": session_cfg,
+        }
+
+    def execute_realtime_tool(
+        self,
+        *,
+        tool_name: str,
+        arguments: dict[str, Any],
+        farm_id: str,
+        session_id: str,
+        libraries: LibraryStore,
+        memory_store: Any,
+        user_id: str | None = None,
+        access_token: str | None = None,
+        allow_network: bool | None = None,
+    ) -> dict[str, Any]:
+        if tool_name == "propose_farm_fact":
+            proposed_value: Any = arguments.get("proposed_value", "")
+            target_field = str(arguments.get("target_field") or "")
+            if target_field == "field_observations":
+                proposed_value = {
+                    "zone": arguments.get("zone") or "general",
+                    "event_type": arguments.get("event_type") or "general",
+                    "affected_crop": arguments.get("affected_crop"),
+                    "timing_or_duration": arguments.get("timing_or_duration"),
+                    "observation": arguments.get("proposed_value", ""),
+                }
+            pending = PendingConfirmation(
+                confirmation_id=uuid.uuid4().hex[:12],
+                target_field=target_field,
+                proposed_value=proposed_value,
+                human_label=str(arguments.get("human_label") or proposed_value),
+                confirmation_prompt=str(arguments.get("confirmation_prompt") or ""),
+            )
+            memory_store.save_pending(session_id, pending)
+            dumped = pending.model_dump(mode="json")
+            return {
+                "event": {
+                    "type": "pending_confirmation",
+                    "pending_confirmation": dumped,
+                    "data": dumped,
+                },
+                "output": {"status": "awaiting_farmer_confirmation"},
+            }
+
+        if tool_name == "get_nasa_climate_and_rotation":
+            scenario = str(arguments.get("scenario") or "normal")
+            suggested_crop = str(arguments.get("suggested_crop") or "").strip()
+            raw_candidates = list(arguments.get("candidate_crops") or [])
+            if suggested_crop:
+                raw_candidates = [suggested_crop] + [
+                    c for c in raw_candidates if str(c).strip().lower() != suggested_crop.lower()
+                ]
+            candidate_crops = raw_candidates or None
+
+            current_farm = memory_store.get_or_create_farm(
+                farm_id, user_id=user_id, access_token=access_token
+            )
+            use_net = (
+                os.getenv("NASA_POWER_ALLOW_NETWORK", "true").lower() == "true"
+                if allow_network is None
+                else allow_network
+            )
+            clim = self.climate_service.get_summary(
+                current_farm.location.latitude or 5.647,
+                current_farm.location.longitude or 100.487,
+                scenario=scenario,
+                allow_network=use_net,
+            )
+            comp = compare_rotations(
+                memory=current_farm,
+                libraries=libraries,
+                climate=clim,
+                candidate_crop_names=candidate_crops,
+                scenario=scenario,
+            )
+            memory_store.save_rotation_comparison(
+                farm_id=farm_id,
+                result=comp,
+                user_id=user_id,
+                access_token=access_token,
+            )
+            return {
+                "event": {
+                    "type": "rotation_updated",
+                    "comparison": comp,
+                    "suggested_crop": suggested_crop
+                    or (comp["options"][0].get("name_en") if comp.get("options") else ""),
+                    "candidate_crops": raw_candidates,
+                },
+                "output": comp,
+            }
+
+        return {"event": None, "output": {"status": "unknown_tool"}}
+
     async def handle_websocket(
         self,
         websocket: WebSocket,
@@ -203,68 +425,18 @@ class OpenAIRealtimeService:
         noise_mode: str = "strict",
     ) -> None:
         await websocket.accept()
-        instructions = self._build_instructions(
-            language, libraries, memory_store, farm_id, user_id=user_id, access_token=access_token
+        session_cfg = self.build_session_config(
+            language=language,
+            libraries=libraries,
+            memory_store=memory_store,
+            farm_id=farm_id,
+            user_id=user_id,
+            access_token=access_token,
+            noise_mode=noise_mode,
         )
 
         async with self.client.realtime.connect(model=self.model) as conn:
-            await conn.session.update(
-                session={
-                    "type": "realtime",
-                    "model": self.model,
-                    "instructions": instructions,
-                    "audio": {
-                        "input": _audio_input_config(language, noise_mode),
-                        "output": {"voice": self.voice},
-                    },
-                    "tools": [
-                        {
-                            "type": "function",
-                            "name": "propose_farm_fact",
-                            "description": "Propose a farmer-stated fact for read-back confirmation before saving to FarmMemory.",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "target_field": {"type": "string"},
-                                    "proposed_value": {"type": "string"},
-                                    "human_label": {"type": "string"},
-                                    "confirmation_prompt": {"type": "string"},
-                                    "zone": {"type": "string"},
-                                    "event_type": {"type": "string"},
-                                    "affected_crop": {"type": "string"},
-                                    "timing_or_duration": {"type": "string"},
-                                },
-                                "required": ["target_field", "proposed_value", "human_label", "confirmation_prompt"],
-                            },
-                        },
-                        {
-                            "type": "function",
-                            "name": "get_nasa_climate_and_rotation",
-                            "description": "Fetch NASA POWER climate summary and crop rotation trade-offs for this farm, and update the app UI's 'Suggested Crop' and 'Rotation detail' cards to match your spoken suggestion.",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "suggested_crop": {
-                                        "type": "string",
-                                        "description": "Your #1 suggested crop name or crop_id (e.g. 'kacang tanah', 'jagung manis', 'keledek', 'chilli', 'padi', 'betik', 'nanas') to feature in the UI header.",
-                                    },
-                                    "scenario": {
-                                        "type": "string",
-                                        "enum": ["normal", "drier", "wetter"],
-                                        "description": "What-if seasonal rainfall sensitivity scenario.",
-                                    },
-                                    "candidate_crops": {
-                                        "type": "array",
-                                        "items": {"type": "string"},
-                                        "description": "Up to 3 crop names to compare in order of suitability.",
-                                    },
-                                },
-                                "required": ["scenario"],
-                            },
-                        },
-                    ],
-                }
-            )
+            await conn.session.update(session=session_cfg)
 
             async def client_to_openai() -> None:
                 try:
@@ -339,88 +511,25 @@ class OpenAIRealtimeService:
                             await websocket.send_json({"type": "user_transcript", "text": event.transcript})
                         elif event.type == "response.function_call_arguments.done":
                             resp_buffer.mark_function_call()
-                            if event.name == "propose_farm_fact":
-                                args = json.loads(event.arguments)
-                                proposed_value: Any = args["proposed_value"]
-                                if args["target_field"] == "field_observations":
-                                    proposed_value = {
-                                        "zone": args.get("zone") or "general",
-                                        "event_type": args.get("event_type") or "general",
-                                        "affected_crop": args.get("affected_crop"),
-                                        "timing_or_duration": args.get("timing_or_duration"),
-                                        "observation": args["proposed_value"],
-                                    }
-                                pending = PendingConfirmation(
-                                    confirmation_id=uuid.uuid4().hex[:12],
-                                    target_field=args["target_field"],
-                                    proposed_value=proposed_value,
-                                    human_label=args["human_label"],
-                                    confirmation_prompt=args["confirmation_prompt"],
-                                )
-                                memory_store.save_pending(session_id, pending)
-                                dumped = pending.model_dump(mode="json")
-                                await websocket.send_json(
-                                    {
-                                        "type": "pending_confirmation",
-                                        "pending_confirmation": dumped,
-                                        "data": dumped,
-                                    }
-                                )
-                                await conn.conversation.item.create(
-                                    item={
-                                        "type": "function_call_output",
-                                        "call_id": event.call_id,
-                                        "output": json.dumps({"status": "awaiting_farmer_confirmation"}),
-                                    }
-                                )
-                                await conn.response.create()
-                            elif event.name == "get_nasa_climate_and_rotation":
+                            if event.name in ("propose_farm_fact", "get_nasa_climate_and_rotation"):
                                 args = json.loads(event.arguments or "{}")
-                                scenario = args.get("scenario", "normal")
-                                suggested_crop = (args.get("suggested_crop") or "").strip()
-                                raw_candidates = list(args.get("candidate_crops") or [])
-                                if suggested_crop:
-                                    raw_candidates = [suggested_crop] + [
-                                        c for c in raw_candidates if c.strip().lower() != suggested_crop.lower()
-                                    ]
-                                candidate_crops = raw_candidates or None
-
-                                current_farm = memory_store.get_or_create_farm(
-                                    farm_id, user_id=user_id, access_token=access_token
-                                )
-                                use_net = os.getenv("NASA_POWER_ALLOW_NETWORK", "true").lower() == "true"
-                                clim = self.climate_service.get_summary(
-                                    current_farm.location.latitude or 5.647,
-                                    current_farm.location.longitude or 100.487,
-                                    scenario=scenario,
-                                    allow_network=use_net,
-                                )
-                                comp = compare_rotations(
-                                    memory=current_farm,
-                                    libraries=libraries,
-                                    climate=clim,
-                                    candidate_crop_names=candidate_crops,
-                                    scenario=scenario,
-                                )
-                                memory_store.save_rotation_comparison(
+                                tool_res = self.execute_realtime_tool(
+                                    tool_name=event.name,
+                                    arguments=args,
                                     farm_id=farm_id,
-                                    result=comp,
+                                    session_id=session_id,
+                                    libraries=libraries,
+                                    memory_store=memory_store,
                                     user_id=user_id,
                                     access_token=access_token,
                                 )
-                                await websocket.send_json(
-                                    {
-                                        "type": "rotation_updated",
-                                        "comparison": comp,
-                                        "suggested_crop": suggested_crop or (comp["options"][0].get("name_en") if comp.get("options") else ""),
-                                        "candidate_crops": raw_candidates,
-                                    }
-                                )
+                                if tool_res.get("event"):
+                                    await websocket.send_json(tool_res["event"])
                                 await conn.conversation.item.create(
                                     item={
                                         "type": "function_call_output",
                                         "call_id": event.call_id,
-                                        "output": json.dumps(comp, ensure_ascii=False),
+                                        "output": json.dumps(tool_res["output"], ensure_ascii=False),
                                     }
                                 )
                                 await conn.response.create()

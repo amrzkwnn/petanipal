@@ -924,6 +924,8 @@
       supabaseClient: null,
       supabaseEnabled: false,
       allowLocalGuest: false,
+      serverless: false,
+      directOpenAiWs: false,
       scenario: 'normal',
       comparison: null,
       selectedOptionIdx: 0,
@@ -1081,7 +1083,8 @@
         const cfg = await res.json();
         state.supabaseEnabled = Boolean(cfg.supabase_enabled);
         state.allowLocalGuest = Boolean(cfg.allow_local_guest);
-        if (!state.allowLocalGuest && cfg.supabase_enabled && cfg.supabase_url && cfg.supabase_anon_key && window.supabase) {
+        state.serverless = Boolean(cfg.serverless);
+        if (cfg.supabase_enabled && cfg.supabase_url && cfg.supabase_anon_key && window.supabase) {
           state.supabaseClient = window.supabase.createClient(cfg.supabase_url, cfg.supabase_anon_key);
           const { data: sessionData } = await state.supabaseClient.auth.getSession();
           state.accessToken = sessionData?.session?.access_token || null;
@@ -1144,13 +1147,14 @@
         `;
       }
 
-      if (state.supabaseEnabled && !state.allowLocalGuest) {
+      const hasCredentials = Boolean(email && password && !password.startsWith('••'));
+      if (state.supabaseEnabled && (hasCredentials || !state.allowLocalGuest)) {
         if (!state.supabaseClient) {
           showLoginError('Authentication service is unavailable. Please reload and try again.');
           resetSignInButton(btnSignIn);
           return;
         }
-        if (!email || !password || password.startsWith('••')) {
+        if (!hasCredentials) {
           showLoginError('Please enter your email and password.');
           resetSignInButton(btnSignIn);
           return;
@@ -1450,6 +1454,10 @@
             confirmation_id: state.pendingConfirmation.confirmation_id,
             accepted: accepted,
             language: state.language,
+            target_field: state.pendingConfirmation.target_field || null,
+            proposed_value: state.pendingConfirmation.proposed_value ?? null,
+            human_label: state.pendingConfirmation.human_label || null,
+            confirmation_prompt: state.pendingConfirmation.confirmation_prompt || null,
           }),
         });
         const data = await res.json();
@@ -1526,6 +1534,24 @@
     let liveFallbackRunning = false;
     let liveBrowserRecognition = null;
 
+    function buildDirectAudioInputConfig(language, mode) {
+      const isStrict = String(mode || 'strict').toLowerCase() !== 'balanced';
+      return {
+        noise_reduction: {
+          type: isStrict ? 'near_field' : 'far_field',
+          strength: isStrict ? 1.0 : 0.75,
+        },
+        turn_detection: {
+          type: 'server_vad',
+          threshold: isStrict ? 0.68 : 0.55,
+          prefix_padding_ms: 300,
+          silence_duration_ms: isStrict ? 700 : 600,
+          interrupt_response: false,
+        },
+        transcription: { model: 'gpt-4o-transcribe', language: language || 'ms' },
+      };
+    }
+
     function setVoiceFilterMode(mode) {
       state.voiceFilterMode = mode === 'balanced' ? 'balanced' : 'strict';
       const isStrict = state.voiceFilterMode === 'strict';
@@ -1547,7 +1573,17 @@
       }
       if (state.realtimeWs && state.realtimeWs.readyState === WebSocket.OPEN) {
         try {
-          state.realtimeWs.send(JSON.stringify({ type: 'update_audio_filter', mode: state.voiceFilterMode }));
+          if (state.directOpenAiWs) {
+            state.realtimeWs.send(JSON.stringify({
+              type: 'session.update',
+              session: {
+                type: 'realtime',
+                audio: { input: buildDirectAudioInputConfig(state.language, state.voiceFilterMode) },
+              },
+            }));
+          } else {
+            state.realtimeWs.send(JSON.stringify({ type: 'update_audio_filter', mode: state.voiceFilterMode }));
+          }
         } catch (e) {}
       }
     }
@@ -1798,6 +1834,23 @@
       }
     }
 
+    function combinePcm16Base64Chunks(chunks) {
+      if (!chunks || chunks.length === 0) return '';
+      if (chunks.length === 1) return chunks[0];
+      try {
+        let totalLen = 0;
+        const decoded = chunks.filter(Boolean).map(c => {
+          const bin = atob(c);
+          totalLen += bin.length;
+          return bin;
+        });
+        if (!totalLen) return '';
+        return btoa(decoded.join(''));
+      } catch (e) {
+        return chunks[0] || '';
+      }
+    }
+
     async function startFallbackContinuousTurnLoop(stream) {
       // Automatic VAD turn-by-turn fallback if Realtime WebSocket is unavailable
       if (!state.isListening || !stream || liveFallbackRunning) return;
@@ -1810,23 +1863,35 @@
         liveFilterGraph = createFilteredMicPipeline(stream, liveAudioCtx);
       }
       const targetStream = stream;
-      const analyser = liveAudioCtx.createAnalyser();
-      analyser.fftSize = 512;
-      liveFilterGraph.compressor.connect(analyser);
-      analyser.connect(liveFilterGraph.silentGain);
-      const dataArr = new Float32Array(analyser.fftSize);
+      if (liveProcessor) {
+        try { liveProcessor.disconnect(); } catch (e) {}
+      }
+      liveProcessor = liveAudioCtx.createScriptProcessor(2048, 1, 1);
+      liveFilterGraph.compressor.connect(liveProcessor);
+      liveProcessor.connect(liveFilterGraph.silentGain);
 
       let speaking = false;
       let silenceStart = 0;
       let recorder = null;
       let chunks = [];
       let busyTurn = false;
+      let preferredMime = '';
+      if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
+        for (const m of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']) {
+          if (MediaRecorder.isTypeSupported(m)) {
+            preferredMime = m;
+            break;
+          }
+        }
+      }
 
       const startSegmentRecorder = () => {
         if (!state.isListening || busyTurn) return;
         chunks = [];
         try {
-          recorder = new MediaRecorder(targetStream);
+          recorder = preferredMime
+            ? new MediaRecorder(targetStream, { mimeType: preferredMime })
+            : new MediaRecorder(targetStream);
         } catch (err) {
           console.warn('MediaRecorder init failed:', err);
           return;
@@ -1834,7 +1899,9 @@
         recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
         recorder.onstop = async () => {
           if (!state.isListening) return;
-          const blob = new Blob(chunks, { type: 'audio/webm' });
+          const actualMime = recorder.mimeType || preferredMime || 'audio/webm';
+          const ext = actualMime.includes('mp4') ? 'm4a' : 'webm';
+          const blob = new Blob(chunks, { type: actualMime });
           if (blob.size < 400) {
             busyTurn = false;
             return;
@@ -1844,7 +1911,7 @@
           setListeningIndicator('processing');
           try {
             const form = new FormData();
-            form.append('audio', blob, 'utterance.webm');
+            form.append('audio', blob, `utterance.${ext}`);
             form.append('farm_id', state.farmId);
             form.append('session_id', state.sessionId);
             form.append('language', state.language);
@@ -1884,36 +1951,348 @@
         recorder.start();
       };
 
-      const checkVad = () => {
-        if (!state.isListening) return;
+      liveProcessor.onaudioprocess = ev => {
+        if (!state.isListening || !liveFallbackRunning) return;
         const palBusyOrEcho = liveSubMode === 'speaking_pal' || liveActiveSources.length > 0 || Date.now() < liveEchoTailUntil;
-        if (!busyTurn && !palBusyOrEcho) {
-          analyser.getFloatTimeDomainData(dataArr);
-          const gated = liveFilterGraph.processFrame(dataArr);
-
-          if (gated.passed) {
-            if (!speaking) {
-              speaking = true;
-              liveSubMode = 'speaking_user';
-              setListeningIndicator('speaking_user');
-              startSegmentRecorder();
-            }
-            silenceStart = Date.now();
-          } else {
-            if (!speaking && gated.ambientDetected && liveSubMode === 'listening') {
-              setListeningIndicator('ambient_filtered');
-            }
-            if (speaking && Date.now() - silenceStart > 1100) {
-              speaking = false;
-              if (recorder && recorder.state !== 'inactive') {
-                recorder.stop();
-              }
+        if (busyTurn || palBusyOrEcho) return;
+        const inputData = ev.inputBuffer.getChannelData(0);
+        const gated = liveFilterGraph.processFrame(inputData);
+        if (gated.passed || gated.rms >= 0.0025) {
+          if (!speaking) {
+            speaking = true;
+            liveSubMode = 'speaking_user';
+            setListeningIndicator('speaking_user');
+            startSegmentRecorder();
+          }
+          silenceStart = Date.now();
+        } else {
+          if (!speaking && gated.ambientDetected && liveSubMode === 'listening') {
+            setListeningIndicator('ambient_filtered');
+          }
+          if (speaking && Date.now() - silenceStart > 1000) {
+            speaking = false;
+            if (recorder && recorder.state !== 'inactive') {
+              recorder.stop();
             }
           }
         }
-        if (state.isListening) requestAnimationFrame(checkVad);
       };
-      requestAnimationFrame(checkVad);
+    }
+
+    let responseUpdatedRotation = false;
+
+    function updateScenarioButtons(scen) {
+      state.scenario = scen || 'normal';
+      ['normal', 'drier', 'wetter'].forEach(s => {
+        const btn = document.getElementById(`scen-${s}`);
+        if (!btn) return;
+        btn.className = s === state.scenario
+          ? 'px-2.5 py-1 rounded-full text-[11px] font-bold clay-nav-active text-white cursor-pointer'
+          : 'px-2.5 py-1 rounded-full text-[11px] font-bold clay-pill-btn text-[#1b4d3e] cursor-pointer';
+      });
+    }
+
+    function handleNormalizedRealtimeEvent(msg) {
+      if (!msg || !msg.type) return;
+      if (msg.type === 'speech_started') {
+        if (liveActiveSources.length > 0 || liveSubMode === 'speaking_pal') {
+          return;
+        }
+        stopPalAudioPlayback();
+        document.getElementById('pal-says-text').dataset.streaming = '0';
+        liveSubMode = 'speaking_user';
+        setListeningIndicator('speaking_user');
+      } else if (msg.type === 'speech_stopped') {
+        if (liveActiveSources.length === 0 && liveSubMode !== 'speaking_pal') {
+          liveSubMode = 'processing';
+          setListeningIndicator('processing');
+        }
+      } else if (msg.type === 'response_started') {
+        responseUpdatedRotation = false;
+        document.getElementById('pal-says-text').dataset.streaming = '0';
+        if (liveActiveSources.length === 0) {
+          liveSubMode = 'processing';
+          setListeningIndicator('processing');
+        }
+      } else if (msg.type === 'transcript_delta' && msg.delta) {
+        const el = document.getElementById('pal-says-text');
+        el.textContent = (el.dataset.streaming === '1' ? el.textContent : '') + msg.delta;
+        el.dataset.streaming = '1';
+      } else if (msg.type === 'audio_delta' && msg.delta) {
+        stopPalAudioPlayback();
+        liveSubMode = 'speaking_pal';
+        setListeningIndicator('speaking_pal');
+        playPcm16Base64Delta(msg.delta);
+      } else if (msg.type === 'rotation_updated' && msg.comparison) {
+        responseUpdatedRotation = true;
+        state.comparison = msg.comparison;
+        state.selectedOptionIdx = 0;
+        updateScenarioButtons(msg.comparison.scenario || 'normal');
+        if (Array.isArray(msg.candidate_crops) && msg.candidate_crops.length > 0) {
+          const inp = document.getElementById('custom-crops-input');
+          if (inp) inp.value = msg.candidate_crops.join(', ');
+        }
+        renderRotationDetail();
+        const topOpt = msg.comparison.options?.[0];
+        if (topOpt) {
+          const cropTitle = state.language === 'ms' ? topOpt.name_ms : topOpt.name_en;
+          document.getElementById('reassurance-status-text').textContent =
+            state.language === 'ms'
+              ? `Cadangan dikemas kini: ${cropTitle} (data NASA POWER)`
+              : `Suggested updated: ${cropTitle} (NASA POWER data)`;
+        }
+      } else if (msg.type === 'response_done') {
+        const palEl = document.getElementById('pal-says-text');
+        palEl.dataset.streaming = '0';
+        if (!responseUpdatedRotation && palEl.textContent) {
+          syncSuggestedCropFromAssistantText(palEl.textContent);
+        }
+        refreshDeviceFarmCache(state.farmId);
+        if (liveActiveSources.length === 0) {
+          liveSubMode = 'listening';
+          setListeningIndicator('listening');
+        }
+      } else if (msg.type === 'pending_confirmation' && (msg.pending_confirmation || msg.data)) {
+        const pendingObj = msg.pending_confirmation || msg.data;
+        document.getElementById('pal-says-text').dataset.streaming = '0';
+        state.pendingConfirmation = pendingObj;
+        if (pendingObj.confirmation_prompt) {
+          document.getElementById('pal-says-text').textContent = pendingObj.confirmation_prompt;
+        }
+        document.getElementById('pending-confirm-box').classList.remove('hidden');
+      } else if (msg.type === 'error') {
+        if (msg.message) {
+          document.getElementById('reassurance-status-text').textContent = msg.message;
+        }
+        if (state.isListening && liveMicStream) {
+          startFallbackContinuousTurnLoop(liveMicStream);
+        }
+      } else if (msg.assistant_text) {
+        document.getElementById('pal-says-text').textContent = msg.assistant_text;
+      }
+    }
+
+    async function attachMicProcessorToRealtimeWs(ws, isDirectOpenAI) {
+      ensureLiveAudioContext();
+      if (liveAudioCtx && liveAudioCtx.state === 'suspended') {
+        await liveAudioCtx.resume();
+      }
+      liveNextPlayTime = liveAudioCtx.currentTime;
+      if (liveProcessor) {
+        try { liveProcessor.disconnect(); } catch (e) {}
+      }
+      if (liveFilterGraph) {
+        liveFilterGraph.disconnect();
+      }
+      liveFilterGraph = createFilteredMicPipeline(liveMicStream, liveAudioCtx);
+      liveSource = liveFilterGraph.source;
+      liveProcessor = liveAudioCtx.createScriptProcessor(2048, 1, 1);
+
+      let zeroFrames = 0;
+      let warnedSilentMic = false;
+      liveProcessor.onaudioprocess = ev => {
+        if (!state.isListening || !state.realtimeWs || state.realtimeWs !== ws || ws.readyState !== WebSocket.OPEN) return;
+        if (liveSubMode === 'speaking_pal' || liveActiveSources.length > 0 || Date.now() < liveEchoTailUntil) {
+          return;
+        }
+        const inputData = ev.inputBuffer.getChannelData(0);
+        const gated = liveFilterGraph.processFrame(inputData);
+        if (gated.rms < 0.00005) {
+          zeroFrames += 1;
+          if (zeroFrames >= 30 && !warnedSilentMic) {
+            warnedSilentMic = true;
+            document.getElementById('reassurance-status-text').textContent =
+              state.language === 'ms'
+                ? 'Tiada audio mikrofon dikesan — semak input mikrofon peranti/pelayar'
+                : 'No mic audio detected — check Windows/browser microphone input';
+          }
+        } else {
+          zeroFrames = 0;
+          if (warnedSilentMic) {
+            warnedSilentMic = false;
+            document.getElementById('reassurance-status-text').textContent = '';
+          }
+        }
+        if (!gated.passed && gated.ambientDetected && liveSubMode === 'listening') {
+          setListeningIndicator('ambient_filtered');
+        }
+        for (const frame of gated.frames) {
+          const resampled = resampleFloat32(frame, liveAudioCtx.sampleRate, 24000);
+          const b64 = float32ToPcm16Base64(resampled);
+          ws.send(JSON.stringify(
+            isDirectOpenAI
+              ? { type: 'input_audio_buffer.append', audio: b64 }
+              : { type: 'audio_chunk', audio: b64 }
+          ));
+        }
+      };
+
+      liveFilterGraph.compressor.connect(liveProcessor);
+      liveProcessor.connect(liveFilterGraph.silentGain);
+    }
+
+    async function startDirectOpenAIRealtime(stream) {
+      if (!state.isListening || !stream) return false;
+      try {
+        const res = await fetch('/api/voice/realtime-session', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            farm_id: state.farmId,
+            session_id: state.sessionId,
+            language: state.language,
+            noise_mode: state.voiceFilterMode,
+          }),
+        });
+        if (!res.ok) {
+          startFallbackContinuousTurnLoop(stream);
+          return false;
+        }
+        const sessData = await res.json();
+        if (!sessData.ephemeral_key || !sessData.model) {
+          startFallbackContinuousTurnLoop(stream);
+          return false;
+        }
+        const wsUrl = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(sessData.model)}`;
+        const ws = new WebSocket(wsUrl, ['realtime', `openai-insecure-api-key.${sessData.ephemeral_key}`]);
+        state.realtimeWs = ws;
+        state.directOpenAiWs = true;
+
+        const respBuf = {
+          audioChunks: [],
+          transcriptChunks: [],
+          hasFunctionCall: false,
+          reset() {
+            this.audioChunks = [];
+            this.transcriptChunks = [];
+            this.hasFunctionCall = false;
+          },
+          markFunctionCall() {
+            this.hasFunctionCall = true;
+            this.audioChunks = [];
+            this.transcriptChunks = [];
+          },
+        };
+
+        ws.onopen = async () => {
+          try {
+            if (sessData.session) {
+              ws.send(JSON.stringify({ type: 'session.update', session: sessData.session }));
+            }
+            await attachMicProcessorToRealtimeWs(ws, true);
+          } catch (err) {
+            console.warn('Direct OpenAI AudioContext error:', err);
+            startFallbackContinuousTurnLoop(stream);
+          }
+        };
+
+        ws.onmessage = async ev => {
+          try {
+            const event = JSON.parse(ev.data);
+            if (event.type === 'input_audio_buffer.speech_started') {
+              handleNormalizedRealtimeEvent({ type: 'speech_started' });
+            } else if (event.type === 'input_audio_buffer.speech_stopped') {
+              handleNormalizedRealtimeEvent({ type: 'speech_stopped' });
+            } else if (event.type === 'response.created') {
+              respBuf.reset();
+              handleNormalizedRealtimeEvent({ type: 'response_started' });
+            } else if (event.type === 'response.output_item.added') {
+              if (event.item?.type === 'function_call') {
+                respBuf.markFunctionCall();
+              }
+            } else if (event.type === 'response.output_audio.delta' && event.delta) {
+              if (!respBuf.hasFunctionCall) {
+                respBuf.audioChunks.push(event.delta);
+              }
+            } else if (event.type === 'response.output_audio_transcript.delta' && event.delta) {
+              if (!respBuf.hasFunctionCall) {
+                respBuf.transcriptChunks.push(event.delta);
+              }
+            } else if (event.type === 'response.function_call_arguments.done') {
+              respBuf.markFunctionCall();
+              if (event.name === 'propose_farm_fact' || event.name === 'get_nasa_climate_and_rotation') {
+                let parsedArgs = {};
+                try { parsedArgs = JSON.parse(event.arguments || '{}'); } catch (e) {}
+                const toolRes = await fetch('/api/voice/realtime-tool', {
+                  method: 'POST',
+                  headers: authHeaders({ 'Content-Type': 'application/json' }),
+                  body: JSON.stringify({
+                    farm_id: state.farmId,
+                    session_id: state.sessionId,
+                    tool_name: event.name,
+                    arguments: parsedArgs,
+                  }),
+                });
+                if (toolRes.ok) {
+                  const toolPayload = await toolRes.json();
+                  if (toolPayload.event) {
+                    handleNormalizedRealtimeEvent(toolPayload.event);
+                  }
+                  if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                      type: 'conversation.item.create',
+                      item: {
+                        type: 'function_call_output',
+                        call_id: event.call_id,
+                        output: JSON.stringify(toolPayload.output || {}),
+                      },
+                    }));
+                    ws.send(JSON.stringify({ type: 'response.create' }));
+                  }
+                }
+              }
+            } else if (event.type === 'response.done') {
+              const outItems = event.response?.output || [];
+              if (outItems.some(it => it?.type === 'function_call')) {
+                respBuf.markFunctionCall();
+              }
+              if (respBuf.hasFunctionCall) {
+                respBuf.reset();
+                return;
+              }
+              const status = event.response?.status || 'completed';
+              if (status === 'cancelled' || status === 'failed') {
+                respBuf.reset();
+                handleNormalizedRealtimeEvent({ type: 'response_done' });
+                return;
+              }
+              const transcriptText = respBuf.transcriptChunks.join('');
+              const combinedAudio = combinePcm16Base64Chunks(respBuf.audioChunks);
+              respBuf.reset();
+              if (transcriptText) {
+                handleNormalizedRealtimeEvent({ type: 'transcript_delta', delta: transcriptText });
+              }
+              if (combinedAudio) {
+                handleNormalizedRealtimeEvent({ type: 'audio_delta', delta: combinedAudio });
+              }
+              handleNormalizedRealtimeEvent({ type: 'response_done' });
+            } else if (event.type === 'error') {
+              const errMsg = event.error?.message || String(event.error || '');
+              handleNormalizedRealtimeEvent({ type: 'error', message: errMsg });
+            }
+          } catch (e) {}
+        };
+
+        ws.onerror = () => {
+          if (state.isListening && liveMicStream) {
+            startFallbackContinuousTurnLoop(liveMicStream);
+          }
+        };
+
+        ws.onclose = () => {
+          if (state.realtimeWs === ws) {
+            state.realtimeWs = null;
+            state.directOpenAiWs = false;
+          }
+          if (state.isListening && liveMicStream) {
+            startFallbackContinuousTurnLoop(liveMicStream);
+          }
+        };
+        return true;
+      } catch (e) {
+        startFallbackContinuousTurnLoop(stream);
+        return false;
+      }
     }
 
     async function startLiveConversation() {
@@ -1994,170 +2373,56 @@
         await syncDeviceFarmToServer(state.farmId);
       } catch (e) {}
 
+      // On Vercel (serverless), Python functions do not support incoming WebSockets,
+      // so connect directly from the browser to OpenAI Realtime via an ephemeral key.
+      if (state.serverless) {
+        await startDirectOpenAIRealtime(liveMicStream);
+        return;
+      }
+
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const tokenQuery = state.accessToken ? `&token=${encodeURIComponent(state.accessToken)}` : '';
       const wsUrl = `${proto}//${window.location.host}/ws/voice/${encodeURIComponent(state.farmId)}/${encodeURIComponent(state.sessionId)}?language=${state.language}&noise_mode=${encodeURIComponent(state.voiceFilterMode)}${tokenQuery}`;
       const ws = new WebSocket(wsUrl);
       state.realtimeWs = ws;
+      state.directOpenAiWs = false;
+      let backendWsOpened = false;
+      let triedDirectFallback = false;
 
       ws.onopen = async () => {
+        backendWsOpened = true;
         try {
-          ensureLiveAudioContext();
-          if (liveAudioCtx && liveAudioCtx.state === 'suspended') {
-            await liveAudioCtx.resume();
-          }
-          liveNextPlayTime = liveAudioCtx.currentTime;
-          liveFilterGraph = createFilteredMicPipeline(liveMicStream, liveAudioCtx);
-          liveSource = liveFilterGraph.source;
-          liveProcessor = liveAudioCtx.createScriptProcessor(2048, 1, 1);
-
-          let zeroFrames = 0;
-          let warnedSilentMic = false;
-          liveProcessor.onaudioprocess = ev => {
-            if (!state.isListening || !state.realtimeWs || state.realtimeWs.readyState !== WebSocket.OPEN) return;
-            if (liveSubMode === 'speaking_pal' || liveActiveSources.length > 0 || Date.now() < liveEchoTailUntil) {
-              return;
-            }
-            const inputData = ev.inputBuffer.getChannelData(0);
-            const gated = liveFilterGraph.processFrame(inputData);
-            if (gated.rms < 0.00005) {
-              zeroFrames += 1;
-              if (zeroFrames >= 30 && !warnedSilentMic) {
-                warnedSilentMic = true;
-                document.getElementById('reassurance-status-text').textContent =
-                  state.language === 'ms'
-                    ? 'Tiada audio mikrofon dikesan — semak input mikrofon peranti/pelayar'
-                    : 'No mic audio detected — check Windows/browser microphone input';
-              }
-            } else {
-              zeroFrames = 0;
-              if (warnedSilentMic) {
-                warnedSilentMic = false;
-                document.getElementById('reassurance-status-text').textContent = '';
-              }
-            }
-            if (!gated.passed && gated.ambientDetected && liveSubMode === 'listening') {
-              setListeningIndicator('ambient_filtered');
-            }
-            for (const frame of gated.frames) {
-              const resampled = resampleFloat32(frame, liveAudioCtx.sampleRate, 24000);
-              const b64 = float32ToPcm16Base64(resampled);
-              state.realtimeWs.send(JSON.stringify({ type: 'audio_chunk', audio: b64 }));
-            }
-          };
-
-          liveFilterGraph.compressor.connect(liveProcessor);
-          liveProcessor.connect(liveFilterGraph.silentGain);
+          await attachMicProcessorToRealtimeWs(ws, false);
         } catch (err) {
           console.warn('AudioContext stream error, using continuous VAD fallback:', err);
           startFallbackContinuousTurnLoop(liveMicStream);
         }
       };
 
-      let responseUpdatedRotation = false;
-
-      function updateScenarioButtons(scen) {
-        state.scenario = scen || 'normal';
-        ['normal', 'drier', 'wetter'].forEach(s => {
-          const btn = document.getElementById(`scen-${s}`);
-          if (!btn) return;
-          btn.className = s === state.scenario
-            ? 'px-2.5 py-1 rounded-full text-[11px] font-bold clay-nav-active text-white cursor-pointer'
-            : 'px-2.5 py-1 rounded-full text-[11px] font-bold clay-pill-btn text-[#1b4d3e] cursor-pointer';
-        });
-      }
-
       ws.onmessage = ev => {
         try {
           const msg = JSON.parse(ev.data);
-          if (msg.type === 'speech_started') {
-            if (liveActiveSources.length > 0 || liveSubMode === 'speaking_pal') {
-              return;
-            }
-            stopPalAudioPlayback();
-            document.getElementById('pal-says-text').dataset.streaming = '0';
-            liveSubMode = 'speaking_user';
-            setListeningIndicator('speaking_user');
-          } else if (msg.type === 'speech_stopped') {
-            if (liveActiveSources.length === 0 && liveSubMode !== 'speaking_pal') {
-              liveSubMode = 'processing';
-              setListeningIndicator('processing');
-            }
-          } else if (msg.type === 'response_started') {
-            responseUpdatedRotation = false;
-            document.getElementById('pal-says-text').dataset.streaming = '0';
-            if (liveActiveSources.length === 0) {
-              liveSubMode = 'processing';
-              setListeningIndicator('processing');
-            }
-          } else if (msg.type === 'transcript_delta' && msg.delta) {
-            const el = document.getElementById('pal-says-text');
-            el.textContent = (el.dataset.streaming === '1' ? el.textContent : '') + msg.delta;
-            el.dataset.streaming = '1';
-          } else if (msg.type === 'audio_delta' && msg.delta) {
-            stopPalAudioPlayback();
-            liveSubMode = 'speaking_pal';
-            setListeningIndicator('speaking_pal');
-            playPcm16Base64Delta(msg.delta);
-          } else if (msg.type === 'rotation_updated' && msg.comparison) {
-            responseUpdatedRotation = true;
-            state.comparison = msg.comparison;
-            state.selectedOptionIdx = 0;
-            updateScenarioButtons(msg.comparison.scenario || 'normal');
-            if (Array.isArray(msg.candidate_crops) && msg.candidate_crops.length > 0) {
-              const inp = document.getElementById('custom-crops-input');
-              if (inp) inp.value = msg.candidate_crops.join(', ');
-            }
-            renderRotationDetail();
-            const topOpt = msg.comparison.options?.[0];
-            if (topOpt) {
-              const cropTitle = state.language === 'ms' ? topOpt.name_ms : topOpt.name_en;
-              document.getElementById('reassurance-status-text').textContent =
-                state.language === 'ms'
-                  ? `Cadangan dikemas kini: ${cropTitle} (data NASA POWER)`
-                  : `Suggested updated: ${cropTitle} (NASA POWER data)`;
-            }
-          } else if (msg.type === 'response_done') {
-            const palEl = document.getElementById('pal-says-text');
-            palEl.dataset.streaming = '0';
-            if (!responseUpdatedRotation && palEl.textContent) {
-              syncSuggestedCropFromAssistantText(palEl.textContent);
-            }
-            refreshDeviceFarmCache(state.farmId);
-            if (liveActiveSources.length === 0) {
-              liveSubMode = 'listening';
-              setListeningIndicator('listening');
-            }
-          } else if (msg.type === 'pending_confirmation' && (msg.pending_confirmation || msg.data)) {
-            const pendingObj = msg.pending_confirmation || msg.data;
-            document.getElementById('pal-says-text').dataset.streaming = '0';
-            state.pendingConfirmation = pendingObj;
-            if (pendingObj.confirmation_prompt) {
-              document.getElementById('pal-says-text').textContent = pendingObj.confirmation_prompt;
-            }
-            document.getElementById('pending-confirm-box').classList.remove('hidden');
-          } else if (msg.type === 'error') {
-            if (msg.message) {
-              document.getElementById('reassurance-status-text').textContent = msg.message;
-            }
-            if (state.isListening && liveMicStream) {
-              startFallbackContinuousTurnLoop(liveMicStream);
-            }
-          } else if (msg.assistant_text) {
-            document.getElementById('pal-says-text').textContent = msg.assistant_text;
-          }
+          handleNormalizedRealtimeEvent(msg);
         } catch (err) {}
       };
 
       ws.onerror = () => {
-        if (state.isListening && liveMicStream) {
+        if (state.isListening && liveMicStream && !backendWsOpened && !triedDirectFallback) {
+          triedDirectFallback = true;
+          startDirectOpenAIRealtime(liveMicStream);
+        } else if (state.isListening && liveMicStream && backendWsOpened) {
           startFallbackContinuousTurnLoop(liveMicStream);
         }
       };
 
       ws.onclose = () => {
-        state.realtimeWs = null;
-        if (state.isListening && liveMicStream) {
+        if (state.realtimeWs === ws) {
+          state.realtimeWs = null;
+        }
+        if (state.isListening && liveMicStream && !backendWsOpened && !triedDirectFallback) {
+          triedDirectFallback = true;
+          startDirectOpenAIRealtime(liveMicStream);
+        } else if (state.isListening && liveMicStream && backendWsOpened) {
           startFallbackContinuousTurnLoop(liveMicStream);
         }
       };
@@ -2165,6 +2430,7 @@
 
     function stopLiveConversation() {
       state.isListening = false;
+      state.directOpenAiWs = false;
       liveFallbackRunning = false;
       liveSubMode = 'listening';
       liveEchoTailUntil = 0;
@@ -2259,10 +2525,33 @@
       notifyRealtimeContextRefresh();
     }
 
-    function notifyRealtimeContextRefresh() {
+    async function notifyRealtimeContextRefresh() {
       if (state.realtimeWs && state.realtimeWs.readyState === WebSocket.OPEN) {
         try {
-          state.realtimeWs.send(JSON.stringify({ type: 'refresh_context' }));
+          if (state.directOpenAiWs) {
+            const res = await fetch('/api/voice/realtime-session', {
+              method: 'POST',
+              headers: authHeaders({ 'Content-Type': 'application/json' }),
+              body: JSON.stringify({
+                farm_id: state.farmId,
+                session_id: state.sessionId,
+                language: state.language,
+                noise_mode: state.voiceFilterMode,
+                refresh_only: true,
+              }),
+            });
+            if (res.ok && state.realtimeWs && state.realtimeWs.readyState === WebSocket.OPEN) {
+              const data = await res.json();
+              if (data.session?.instructions) {
+                state.realtimeWs.send(JSON.stringify({
+                  type: 'session.update',
+                  session: { type: 'realtime', instructions: data.session.instructions },
+                }));
+              }
+            }
+          } else {
+            state.realtimeWs.send(JSON.stringify({ type: 'refresh_context' }));
+          }
         } catch (e) {}
       }
     }

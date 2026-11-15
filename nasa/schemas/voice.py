@@ -88,3 +88,7 @@ class VoiceConfirmRequest(BaseModel):
     confirmation_id: str
     accepted: bool
     language: LanguageCode = LanguageCode.MS
+    target_field: Optional[str] = None
+    proposed_value: Optional[Any] = None
+    human_label: Optional[str] = None
+    confirmation_prompt: Optional[str] = None
