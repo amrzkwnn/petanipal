@@ -1,6 +1,7 @@
 import importlib
 import os
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -52,10 +53,21 @@ class SupabaseMemoryStore:
         client.postgrest.auth(access_token)
         return client
 
+    @staticmethod
+    def _is_valid_uuid(value: str) -> bool:
+        try:
+            uuid.UUID(str(value))
+            return True
+        except (ValueError, TypeError, AttributeError):
+            return False
+
     def verify_user(self, access_token: str) -> str:
         """Verify Supabase JWT and return user_id (auto-creates profile on first login)."""
         client = _create_supabase_client(self.url, self.key)
-        res = client.auth.get_user(access_token)
+        try:
+            res = client.auth.get_user(access_token)
+        except Exception as exc:
+            raise HTTPException(status_code=401, detail="Invalid or expired Supabase token.") from exc
         if not res or not res.user:
             raise HTTPException(status_code=401, detail="Invalid or expired Supabase token.")
         user_id = str(res.user.id)
@@ -153,22 +165,21 @@ class SupabaseMemoryStore:
         client = self._client_for_token(access_token)
         row: Optional[dict[str, Any]] = None
 
-        if farm_id not in ("default", "new"):
+        if self._is_valid_uuid(farm_id):
             res = client.table("farms").select("*").eq("id", farm_id).eq("user_id", user_id).execute()
             if res.data:
                 row = res.data[0]
 
-        if row is None and farm_id == "default":
+        if row is None and farm_id != "new":
             res = client.table("farms").select("*").eq("user_id", user_id).limit(1).execute()
             if res.data:
                 row = res.data[0]
 
         if row is None:
-            inserted = (
-                client.table("farms")
-                .insert({"user_id": user_id, "locality": "Sungai Petani, Kedah"})
-                .execute()
-            )
+            insert_payload: dict[str, Any] = {"user_id": user_id, "locality": "Sungai Petani, Kedah"}
+            if farm_id not in ("default", "new") and not self._is_valid_uuid(farm_id):
+                insert_payload["farm_name"] = farm_id.replace("_", " ").title()
+            inserted = client.table("farms").insert(insert_payload).execute()
             row = inserted.data[0]
 
         real_farm_id = str(row["id"])
@@ -190,6 +201,8 @@ class SupabaseMemoryStore:
     ) -> bool:
         if not user_id or not access_token:
             raise HTTPException(status_code=401, detail="Authentication required.")
+        if not self._is_valid_uuid(farm_id):
+            return False
         client = self._client_for_token(access_token)
         res = client.table("farms").delete().eq("id", farm_id).eq("user_id", user_id).execute()
         return bool(res.data)

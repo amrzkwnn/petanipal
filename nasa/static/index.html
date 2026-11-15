@@ -442,7 +442,7 @@
               </div>
               <div class="relative flex items-center">
                 <span class="material-symbols-outlined absolute left-3.5 text-[#c4c7c9] text-lg pointer-events-none">lock</span>
-                <input autocomplete="current-password" class="w-full pl-10 pr-10 py-3 rounded-lg text-white text-[14px] placeholder:text-[#8e9193] focus:outline-none transition-colors" id="operatorKey" placeholder="Enter password" style="background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: rgba(0, 0, 0, 0.3) 0px 2px 4px inset; color: rgb(255, 255, 255); text-shadow: rgba(0, 0, 0, 0.7) 0px 1px 2px;" type="password" value="••••••••••••"/>
+                <input autocomplete="current-password" class="w-full pl-10 pr-10 py-3 rounded-lg text-white text-[14px] placeholder:text-[#8e9193] focus:outline-none transition-colors" id="operatorKey" placeholder="Enter password" style="background: rgba(0, 0, 0, 0.2); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.18); box-shadow: rgba(0, 0, 0, 0.3) 0px 2px 4px inset; color: rgb(255, 255, 255); text-shadow: rgba(0, 0, 0, 0.7) 0px 1px 2px;" type="password" value=""/>
                 <button class="absolute right-3 text-[#c4c7c9] hover:text-white transition-colors cursor-pointer" id="btnTogglePassword" onclick="togglePasswordVisibility()" title="Toggle visibility" type="button">
                   <span class="material-symbols-outlined text-lg" id="pwdToggleIcon">visibility</span>
                 </button>
@@ -1057,6 +1057,8 @@
       );
     }
 
+    let initReadyPromise = null;
+
     async function initApp() {
       try {
         const savedActive = localStorage.getItem(DEVICE_ACTIVE_FARM_KEY);
@@ -1068,12 +1070,35 @@
         state.supabaseEnabled = Boolean(cfg.supabase_enabled);
         if (cfg.supabase_enabled && cfg.supabase_url && cfg.supabase_anon_key && window.supabase) {
           state.supabaseClient = window.supabase.createClient(cfg.supabase_url, cfg.supabase_anon_key);
+          const { data: sessionData } = await state.supabaseClient.auth.getSession();
+          state.accessToken = sessionData?.session?.access_token || null;
+          state.supabaseClient.auth.onAuthStateChange((_event, session) => {
+            state.accessToken = session?.access_token || null;
+          });
         }
       } catch (e) {
         console.warn('Config fallback:', e);
       }
-      syncAllDeviceFarmsOnStartup().catch(() => {});
+      if (!state.supabaseEnabled || state.accessToken) {
+        syncAllDeviceFarmsOnStartup().catch(() => {});
+      }
       setupEarthHoldInteraction();
+    }
+
+    function resetSignInButton(btnSignIn) {
+      if (!btnSignIn) return;
+      btnSignIn.disabled = false;
+      btnSignIn.innerHTML = `
+        <span>Sign In</span>
+        <span class="material-symbols-outlined text-lg">arrow_forward</span>
+      `;
+    }
+
+    function showLoginError(msg) {
+      const errEl = document.getElementById('loginErrorMsg');
+      if (!errEl) return;
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
     }
 
     function togglePasswordVisibility() {
@@ -1086,6 +1111,9 @@
     }
 
     async function handleSignIn() {
+      if (initReadyPromise) {
+        await initReadyPromise;
+      }
       const btnSignIn = document.getElementById('btnSignIn');
       const email = document.getElementById('operatorId')?.value?.trim() || '';
       const password = document.getElementById('operatorKey')?.value?.trim() || '';
@@ -1100,15 +1128,38 @@
         `;
       }
 
-      if (state.supabaseClient && email && password && !password.startsWith('••')) {
+      if (state.supabaseEnabled) {
+        if (!state.supabaseClient) {
+          showLoginError('Authentication service is unavailable. Please reload and try again.');
+          resetSignInButton(btnSignIn);
+          return;
+        }
+        if (!email || !password || password.startsWith('••')) {
+          showLoginError('Please enter your email and password.');
+          resetSignInButton(btnSignIn);
+          return;
+        }
         const { data, error } = await state.supabaseClient.auth.signInWithPassword({ email, password });
         if (error) {
           const signUpRes = await state.supabaseClient.auth.signUp({ email, password });
-          if (!signUpRes.error) {
-            state.accessToken = signUpRes.data?.session?.access_token || null;
+          if (signUpRes.error) {
+            showLoginError(signUpRes.error.message || error.message || 'Sign in failed.');
+            resetSignInButton(btnSignIn);
+            return;
+          }
+          state.accessToken = signUpRes.data?.session?.access_token || null;
+          if (!state.accessToken) {
+            showLoginError('Account created. Check your email to confirm before signing in.');
+            resetSignInButton(btnSignIn);
+            return;
           }
         } else {
           state.accessToken = data?.session?.access_token || null;
+        }
+        if (!state.accessToken) {
+          showLoginError('No active session token returned. Please try again.');
+          resetSignInButton(btnSignIn);
+          return;
         }
       }
 
@@ -1244,6 +1295,9 @@
       try { localStorage.setItem(DEVICE_ACTIVE_FARM_KEY, farmId); } catch (e) {}
       try {
         const farm = await syncDeviceFarmToServer(farmId);
+        const resolvedFarmId = farm?.farm_id || farmId;
+        state.farmId = resolvedFarmId;
+        try { localStorage.setItem(DEVICE_ACTIVE_FARM_KEY, resolvedFarmId); } catch (e) {}
         document.getElementById('settings-locality').value = farm.location?.locality || 'Sungai Petani, Kedah';
         document.getElementById('settings-lat').value = farm.location?.latitude || '';
         document.getElementById('settings-lon').value = farm.location?.longitude || '';
@@ -1253,7 +1307,7 @@
           farm.location?.longitude
         );
 
-        const chkRes = await fetch(`/api/farms/${encodeURIComponent(farmId)}/check-in?language=${state.language}`, {
+        const chkRes = await fetch(`/api/farms/${encodeURIComponent(resolvedFarmId)}/check-in?language=${state.language}`, {
           headers: authHeaders()
         });
         const chkData = await chkRes.json();
@@ -2522,7 +2576,9 @@
       switchTopTab('pal');
     }
 
-    window.addEventListener('DOMContentLoaded', initApp);
+    window.addEventListener('DOMContentLoaded', () => {
+      initReadyPromise = initApp();
+    });
   </script>
 </body>
 </html>
