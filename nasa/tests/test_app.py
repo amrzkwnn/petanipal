@@ -747,3 +747,55 @@ def test_earth_hold_to_listen_interrupt_and_inline_status():
     assert 'id="listeningStatusPill" class="hidden' in html
 
 
+def test_strict_language_lock_prevents_switching(tmp_path):
+    from schemas import LanguageCode
+    from services.climate_service import NasaPowerClimateService
+    from services.library_store import LibraryStore
+    from services.memory_store import MemoryStore
+    from services.realtime_voice import OpenAIRealtimeService
+
+    libs = LibraryStore(Path("nasa/data"))
+    store = MemoryStore(tmp_path / "lang_lock_farms")
+    clim = NasaPowerClimateService(cache_dir=Path("nasa/storage/climate_cache"))
+    rt = OpenAIRealtimeService.__new__(OpenAIRealtimeService)
+    rt.model = "gpt-realtime-2.1-mini"
+    rt.voice = "alloy"
+    rt.climate_service = clim
+
+    en_cfg = rt.build_session_config(
+        language=LanguageCode.EN,
+        libraries=libs,
+        memory_store=store,
+        farm_id="green_valley_plot",
+        allow_network=False,
+    )
+    assert "STRICT LANGUAGE LOCK (FIXED TO SELECTED UI LANGUAGE: ENGLISH 'EN')" in en_cfg["instructions"]
+    assert "NEVER switch to Bahasa Melayu" in en_cfg["instructions"]
+    assert en_cfg["audio"]["input"]["transcription"]["language"] == "en"
+    assert "Transcribe in English" in en_cfg["audio"]["input"]["transcription"]["prompt"]
+
+    ms_cfg = rt.build_session_config(
+        language=LanguageCode.MS,
+        libraries=libs,
+        memory_store=store,
+        farm_id="green_valley_plot",
+        allow_network=False,
+    )
+    assert "STRICT LANGUAGE LOCK (FIXED TO SELECTED UI LANGUAGE: BAHASA MELAYU 'MS')" in ms_cfg["instructions"]
+    assert "NEVER switch to English" in ms_cfg["instructions"]
+    assert ms_cfg["audio"]["input"]["transcription"]["language"] == "ms"
+    assert "Transkripsi dalam Bahasa Melayu Malaysia" in ms_cfg["audio"]["input"]["transcription"]["prompt"]
+
+    tool_out_en = rt.execute_realtime_tool(
+        tool_name="get_nasa_climate_and_rotation",
+        arguments={"scenario": "normal", "suggested_crop": "sweet corn"},
+        farm_id="green_valley_plot",
+        session_id="s_en",
+        libraries=libs,
+        memory_store=store,
+        language=LanguageCode.EN,
+        allow_network=False,
+    )
+    assert tool_out_en["output"]["locked_language"] == "en"
+    assert "Respond strictly in English" in tool_out_en["output"]["language_rule"]
+

@@ -140,6 +140,7 @@ class RealtimeToolRequest(BaseModel):
     farm_id: str
     session_id: str
     tool_name: str
+    language: LanguageCode = LanguageCode.EN
     arguments: dict[str, Any] = {}
 
 
@@ -653,6 +654,7 @@ async def execute_realtime_tool_endpoint(
         session_id=payload.session_id,
         libraries=libraries,
         memory_store=store,
+        language=payload.language,
         user_id=user_id,
         access_token=access_token,
     )

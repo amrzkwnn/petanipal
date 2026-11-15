@@ -16,9 +16,33 @@ from services.memory_store import MemoryStore
 from services.rotation_engine import compare_rotations
 
 
+def _language_lock_rule(language: LanguageCode) -> str:
+    """Return an explicit, non-negotiable language lock rule for the selected UI language."""
+    if language == LanguageCode.MS:
+        return (
+            "STRICT LANGUAGE LOCK (FIXED TO SELECTED UI LANGUAGE: BAHASA MELAYU 'MS'):\n"
+            "- The user selected BAHASA MELAYU ('MS') in the language selector under the AI.\n"
+            "- You MUST speak, respond, and write `confirmation_prompt` and `human_label` 100% in everyday Malaysian Bahasa Melayu ONLY.\n"
+            "- NEVER switch to English, Indonesian, Chinese, Tamil, or any other language under ANY circumstances — even if the user speaks in English/another language, uses English crop terms, or if background noise is transcribed in another language.\n"
+            "- If the user speaks in another language while 'MS' is selected, understand their meaning and reply strictly in Malaysian Bahasa Melayu."
+        )
+    return (
+        "STRICT LANGUAGE LOCK (FIXED TO SELECTED UI LANGUAGE: ENGLISH 'EN'):\n"
+        "- The user selected ENGLISH ('EN') in the language selector under the AI.\n"
+        "- You MUST speak, respond, and write `confirmation_prompt` and `human_label` 100% in plain English ONLY.\n"
+        "- NEVER switch to Bahasa Melayu, Indonesian, Chinese, Tamil, or any other language under ANY circumstances — even if the user speaks in Bahasa Melayu/another language, has a Malaysian accent, uses local place/crop names, or if background noise is transcribed in another language.\n"
+        "- If the user speaks in Bahasa Melayu or another language while 'EN' is selected, understand their meaning and reply strictly in English."
+    )
+
+
 def _audio_input_config(language: LanguageCode, noise_mode: str = "strict") -> dict[str, Any]:
     """Configure OpenAI Realtime input noise reduction and VAD threshold for user vs background separation."""
     is_strict = str(noise_mode).lower() != "balanced"
+    stt_prompt = (
+        "Transkripsi dalam Bahasa Melayu Malaysia mengenai kebun, tanaman, tanah, hujan, dan pengairan."
+        if language == LanguageCode.MS
+        else "Transcribe in English about farming, crops, soil, rainfall, and irrigation."
+    )
     return {
         "noise_reduction": {
             "type": "near_field" if is_strict else "far_field",
@@ -31,7 +55,11 @@ def _audio_input_config(language: LanguageCode, noise_mode: str = "strict") -> d
             "silence_duration_ms": 700 if is_strict else 600,
             "interrupt_response": False,
         },
-        "transcription": {"model": "gpt-4o-transcribe", "language": language.value},
+        "transcription": {
+            "model": "gpt-4o-transcribe",
+            "language": language.value,
+            "prompt": stt_prompt,
+        },
     }
 
 
@@ -159,9 +187,16 @@ class OpenAIRealtimeService:
             }
             for o in (comparison.get("options") or [])
         ]
+        lang_lock = _language_lock_rule(language)
+        example_events = (
+            "'air bertakung 3 hari', 'pam rosak', 'ulat kat jagung'"
+            if language == LanguageCode.MS
+            else "'water stood for 3 days', 'pump is broken', 'caterpillars on the corn'"
+        )
         return (
             f"You are Farm Memory (PetaniPal), a friendly voice assistant helping farmers in {farm.location.locality} ({lat:.4f}, {lon:.4f}). "
             f"Speak ONLY in {lang_instruction}. Never use technical jargon.\n\n"
+            f"{lang_lock}\n\n"
             "LIVE NASA POWER & PLOT SNAPSHOT (INTERNAL REFERENCE ONLY — NEVER SPEAK RAW NUMBERS OR STATS):\n"
             f"- NASA POWER Recent 7-day rain: {climate.rain_7d_mm} mm | 30-day rain: {climate.rain_30d_mm} mm\n"
             f"- Heavy rain days (>=20mm/day) in last 30d: {climate.heavy_rain_days_30d} | Longest dry spell: {climate.longest_dry_spell_days} days\n"
@@ -176,15 +211,16 @@ class OpenAIRealtimeService:
             "DO NOT answer the off-topic question, DO NOT joke or chat about it, and DO NOT call `propose_farm_fact`. Reply in ONE short, warm sentence redirecting back to their farm plot, crops, or recent NASA rainfall, and ask how you can help with their plot.\n"
             "1. Support the farmer's decision; NEVER say 'Plant this crop' or promise guaranteed yields.\n"
             "2. PLAIN DECISION HELP — NO RAW STATISTICS: Use the NASA weather pattern, GeoTanih soil context, and FarmMemory internally to weigh what fits best, then speak in 1 to 3 short, warm, everyday sentences focused on helping the farmer choose. "
-            "NEVER start with filler or thinking phrases like 'Let's see...', 'Hold on...', 'Wait a second...', 'Hmm...', or 'Sekejap ya...'. Call any tool silently first, then speak the ready answer directly in the requested language ONLY (never mix in English filler phrases when speaking Malay). "
+            "NEVER start with filler or thinking phrases like 'Let's see...', 'Hold on...', 'Wait a second...', or 'Hmm...'. Call any tool silently first, then speak the ready answer directly in the locked UI language ONLY. "
             "NEVER read out raw statistics, units, day counts, temperatures, coordinates, or technical jargon (NO mm, NO °C/degrees, NO '6-day dry spell', NO '3 heavy-rain days', NO percentages, NO 'NASA POWER', NO 'GeoTanih Class', NO botanical family names like Fabaceae/Solanaceae). "
             "Instead translate them into plain practical takeaways (e.g., 'it has been rainy lately so drainage matters', 'dry spells mean you may need extra watering early on', 'recent weather is not a guarantee of next week's weather').\n"
             "3. IMPORTANT UI SYNC: WHENEVER you suggest, recommend, or compare crops — OR discuss a normal/drier/wetter scenario — YOU MUST IMMEDIATELY CALL `get_nasa_climate_and_rotation` with `suggested_crop` (your top recommended crop), `candidate_crops` (the 2-3 crops being compared), and `scenario`. Calling this tool updates the 'Suggested -> Crop' and 'Rotation detail' cards in the farmer's app in real time!\n"
             "4. Ground crop facts ONLY in the Reviewed Crop Library, NASA POWER summary, GeoTanih soil context, and Rotation Comparison below. If a crop is not listed, say verified local info is not yet available.\n"
-            "5. 'I don't know' / 'tak pasti' / 'skip' is valid -> record as 'unknown'. Never invent facts.\n"
+            "5. 'I don't know' / 'skip' is valid -> record as 'unknown'. Never invent facts.\n"
             "6. ALWAYS remember and act on facts already in Current FarmMemory (past flooding, broken pump, pests, crop history). Do not re-ask known facts unless checking if anything changed.\n"
-            "7. The farmer can tell you what happened at ANY time (e.g. 'air bertakung 3 hari', 'pam rosak', 'ulat kat jagung'). When they do, or when they answer an interview question, call `propose_farm_fact` and read it back for confirmation before saving. Do NOT save if they only ask a general question.\n"
-            "8. For diagnosis, pesticide/chemical, or safety questions, give cautious general guidance and advise checking with a local DOA officer.\n\n"
+            f"7. The farmer can tell you what happened at ANY time (e.g. {example_events}). When they do, or when they answer an interview question, call `propose_farm_fact` and read it back for confirmation before saving. Do NOT save if they only ask a general question.\n"
+            "8. For diagnosis, pesticide/chemical, or safety questions, give cautious general guidance and advise checking with a local DOA officer.\n"
+            f"9. LANGUAGE CONSISTENCY: Never switch languages mid-session or mid-sentence. Remain 100% locked to '{language.value.upper()}' as selected under the AI.\n\n"
             f"Current FarmMemory: {farm.model_dump_json()}\n"
             f"Next suggested interview question: {next_q.model_dump_json() if next_q else 'All essential questions answered'}\n"
             f"NASA POWER Climate Summary: {climate.model_dump_json()}\n"
@@ -329,10 +365,16 @@ class OpenAIRealtimeService:
         session_id: str,
         libraries: LibraryStore,
         memory_store: Any,
+        language: LanguageCode = LanguageCode.EN,
         user_id: str | None = None,
         access_token: str | None = None,
         allow_network: bool | None = None,
     ) -> dict[str, Any]:
+        lang_reminder = (
+            "WAJIB: Jawab sepenuhnya dalam Bahasa Melayu Malaysia ('MS') sahaja. Jangan tukar ke Bahasa Inggeris atau bahasa lain."
+            if language == LanguageCode.MS
+            else "MANDATORY: Respond strictly in English ('EN') only. Do not switch to Bahasa Melayu or any other language."
+        )
         if tool_name == "propose_farm_fact":
             proposed_value: Any = arguments.get("proposed_value", "")
             target_field = str(arguments.get("target_field") or "")
@@ -359,7 +401,11 @@ class OpenAIRealtimeService:
                     "pending_confirmation": dumped,
                     "data": dumped,
                 },
-                "output": {"status": "awaiting_farmer_confirmation"},
+                "output": {
+                    "status": "awaiting_farmer_confirmation",
+                    "locked_language": language.value,
+                    "language_rule": lang_reminder,
+                },
             }
 
         if tool_name == "get_nasa_climate_and_rotation":
@@ -407,10 +453,21 @@ class OpenAIRealtimeService:
                     or (comp["options"][0].get("name_en") if comp.get("options") else ""),
                     "candidate_crops": raw_candidates,
                 },
-                "output": comp,
+                "output": {
+                    **comp,
+                    "locked_language": language.value,
+                    "language_rule": lang_reminder,
+                },
             }
 
-        return {"event": None, "output": {"status": "unknown_tool"}}
+        return {
+            "event": None,
+            "output": {
+                "status": "unknown_tool",
+                "locked_language": language.value,
+                "language_rule": lang_reminder,
+            },
+        }
 
     async def handle_websocket(
         self,
@@ -530,6 +587,7 @@ class OpenAIRealtimeService:
                                     session_id=session_id,
                                     libraries=libraries,
                                     memory_store=memory_store,
+                                    language=language,
                                     user_id=user_id,
                                     access_token=access_token,
                                 )

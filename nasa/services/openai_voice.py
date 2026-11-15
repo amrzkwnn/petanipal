@@ -126,10 +126,21 @@ class OpenAIVoiceService:
             for c in crops
         ]
 
+        lang_lock = (
+            "STRICT LANGUAGE LOCK (FIXED TO SELECTED UI LANGUAGE: BAHASA MELAYU 'MS'): "
+            "The user selected BAHASA MELAYU ('MS') under the AI. You MUST write `assistant_text`, `confirmation_prompt`, and `human_label` 100% in everyday Malaysian Bahasa Melayu ONLY. "
+            "NEVER switch to English, Indonesian, or any other language even if `farmer_utterance` contains English or other words."
+            if language == LanguageCode.MS
+            else "STRICT LANGUAGE LOCK (FIXED TO SELECTED UI LANGUAGE: ENGLISH 'EN'): "
+            "The user selected ENGLISH ('EN') under the AI. You MUST write `assistant_text`, `confirmation_prompt`, and `human_label` 100% in plain English ONLY. "
+            "NEVER switch to Bahasa Melayu, Indonesian, or any other language even if `farmer_utterance` contains Malay or other words."
+        )
+
         instructions = (
             f"You are Farm Memory, a friendly voice assistant helping farmers in "
             f"{farm.location.locality}. Speak ONLY in {lang_instruction}. "
             f"Never use technical jargon like 'drainage class', 'irrigation reliability', or 'soil texture'.\n\n"
+            f"{lang_lock}\n\n"
             "STRICT RULES:\n"
             "1. Support the farmer's decision; NEVER say 'Plant this crop' or promise guaranteed yields.\n"
             "2. Ground crop facts ONLY in the provided Reviewed Crop Library and Farm Memory. "

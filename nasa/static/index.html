@@ -1344,13 +1344,15 @@
     }
 
     function toggleLanguage() {
-      const wasListening = state.isListening;
       const wasLiveHandsFree = state.isLiveHandsFree;
       state.language = state.language === 'en' ? 'ms' : 'en';
       document.getElementById('langCodeLabel').textContent = state.language.toUpperCase();
-      if (wasListening) {
-        stopLiveConversation();
-        state.isLiveHandsFree = wasLiveHandsFree;
+      // Always reset any existing Realtime session so the AI is strictly locked to the newly selected language
+      stopLiveConversation();
+      if (wasLiveHandsFree) {
+        state.isLiveHandsFree = true;
+        liveSubMode = 'listening';
+        setListeningIndicator('listening');
         startLiveConversation();
       } else {
         setEarthVisualActive(false);
@@ -1581,6 +1583,10 @@
 
     function buildDirectAudioInputConfig(language, mode) {
       const isStrict = String(mode || 'strict').toLowerCase() !== 'balanced';
+      const langCode = language || state.language || 'en';
+      const sttPrompt = langCode === 'ms'
+        ? 'Transkripsi dalam Bahasa Melayu Malaysia mengenai kebun, tanaman, tanah, hujan, dan pengairan.'
+        : 'Transcribe in English about farming, crops, soil, rainfall, and irrigation.';
       return {
         noise_reduction: {
           type: isStrict ? 'near_field' : 'far_field',
@@ -1593,7 +1599,11 @@
           silence_duration_ms: isStrict ? 700 : 600,
           interrupt_response: false,
         },
-        transcription: { model: 'gpt-4o-transcribe', language: language || 'ms' },
+        transcription: {
+          model: 'gpt-4o-transcribe',
+          language: langCode,
+          prompt: sttPrompt,
+        },
       };
     }
 
@@ -2315,6 +2325,7 @@
                     farm_id: state.farmId,
                     session_id: state.sessionId,
                     tool_name: event.name,
+                    language: state.language,
                     arguments: parsedArgs,
                   }),
                 });
@@ -2739,7 +2750,11 @@
               if (data.session?.instructions) {
                 state.realtimeWs.send(JSON.stringify({
                   type: 'session.update',
-                  session: { type: 'realtime', instructions: data.session.instructions },
+                  session: {
+                    type: 'realtime',
+                    instructions: data.session.instructions,
+                    audio: { input: buildDirectAudioInputConfig(state.language, state.voiceFilterMode) },
+                  },
                 }));
               }
             }
