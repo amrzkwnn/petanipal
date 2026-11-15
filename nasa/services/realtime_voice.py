@@ -437,6 +437,7 @@ class OpenAIRealtimeService:
 
         async with self.client.realtime.connect(model=self.model) as conn:
             await conn.session.update(session=session_cfg)
+            resp_buffer = _RealtimeResponseBuffer()
 
             async def client_to_openai() -> None:
                 try:
@@ -451,6 +452,16 @@ class OpenAIRealtimeService:
                         elif msg_type == "audio_commit":
                             await conn.input_audio_buffer.commit()
                             await conn.response.create()
+                        elif msg_type == "interrupt":
+                            resp_buffer.reset()
+                            try:
+                                await conn.response.cancel()
+                            except Exception:
+                                pass
+                            try:
+                                await conn.input_audio_buffer.clear()
+                            except Exception:
+                                pass
                         elif msg_type == "text":
                             await conn.conversation.item.create(
                                 item={
@@ -479,7 +490,6 @@ class OpenAIRealtimeService:
                     return
 
             async def openai_to_client() -> None:
-                resp_buffer = _RealtimeResponseBuffer()
                 try:
                     async for event in conn:
                         if event.type == "input_audio_buffer.speech_started":

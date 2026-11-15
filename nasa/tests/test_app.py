@@ -731,7 +731,16 @@ def test_vercel_serverless_realtime_session_tools_and_stateless_confirm(tmp_path
     assert confirm_res.json()["farm_memory"]["irrigation_availability"]["value"] == "always"
 
 
-
-
+def test_earth_hold_to_listen_interrupt_and_inline_status():
+    html = Path("nasa/static/index.html").read_text(encoding="utf-8")
+    assert "interruptPalSpeech" in html
+    assert "beginEarthHold" in html
+    assert "endEarthHold" in html
+    assert "isHoldingEarth" in html
+    assert "response.cancel" in html
+    assert "Hearing you speak..." in html
+    assert "Hold to interrupt" in html
+    assert 'id="reassurance-status-text" class="hidden' in html
+    assert 'id="listeningStatusPill" class="hidden' in html
 
 
