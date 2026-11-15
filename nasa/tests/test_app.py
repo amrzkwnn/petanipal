@@ -745,6 +745,10 @@ def test_earth_hold_to_listen_interrupt_and_inline_status():
     assert "Tap or Hold to speak" in html
     assert 'id="reassurance-status-text" class="hidden' in html
     assert 'id="listeningStatusPill" class="hidden' in html
+    assert "Candidate Crops" not in html
+    assert 'id="custom-crops-input"' not in html
+    assert "Plot Profile (" not in html
+    assert ">Plot Profile</h3>" in html
 
 
 def test_strict_language_lock_prevents_switching(tmp_path):

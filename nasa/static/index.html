@@ -886,14 +886,7 @@
       </article>
 
       <article class="clay-card rounded-[28px] p-5 space-y-3">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-full clay-icon-pod flex items-center justify-center text-[#1b4d3e]">
-            <span class="material-symbols-outlined text-[18px]">compost</span>
-          </div>
-          <h3 class="font-bold text-[17px] text-[#1d1b19] tracking-tight">Candidate Crops &amp; Realtime</h3>
-        </div>
-        <input id="custom-crops-input" type="text" value="" placeholder="Auto-rank best crops (or e.g. sweet potato, chilli, sweet corn)" class="w-full px-3.5 py-2.5 rounded-2xl bg-[#f5eee7] border border-[#c0c9c3] text-sm font-medium"/>
-        <div class="pt-1 space-y-1.5">
+        <div class="space-y-1.5">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-[#1d1b19]">Voice Noise Filter</span>
             <span id="voice-filter-meter" class="text-[11px] font-medium text-outline">Strict (Noisy / Close Mic)</span>
@@ -928,6 +921,7 @@
       directOpenAiWs: false,
       scenario: 'normal',
       comparison: null,
+      candidateCrops: [],
       selectedOptionIdx: 0,
       mediaRecorder: null,
       audioChunks: [],
@@ -1311,6 +1305,7 @@
     async function selectFarm(farmId, closeFarmCard = true) {
       const farmChanged = Boolean(state.farmId && state.farmId !== farmId);
       state.farmId = farmId;
+      if (farmChanged) state.candidateCrops = [];
       state.pendingConfirmation = null;
       state.activeRealtimeTranscript = '';
       const confirmBox = document.getElementById('pending-confirm-box');
@@ -2129,8 +2124,7 @@
         state.selectedOptionIdx = 0;
         updateScenarioButtons(msg.comparison.scenario || 'normal');
         if (Array.isArray(msg.candidate_crops) && msg.candidate_crops.length > 0) {
-          const inp = document.getElementById('custom-crops-input');
-          if (inp) inp.value = msg.candidate_crops.join(', ');
+          state.candidateCrops = msg.candidate_crops;
         }
         renderRotationDetail();
       } else if (msg.type === 'response_done') {
@@ -2814,17 +2808,15 @@
 
       mentioned.sort((a, b) => a.pos - b.pos);
       const ordered = mentioned.slice(0, 3).map(m => m.canonical);
-      const inp = document.getElementById('custom-crops-input');
-      if (inp) inp.value = ordered.join(', ');
+      state.candidateCrops = ordered;
       state.selectedOptionIdx = 0;
       await runComparison(ordered);
     }
 
     async function runComparison(overrideCrops = null) {
-      const rawVal = document.getElementById('custom-crops-input')?.value?.trim() || '';
       const rawCrops = Array.isArray(overrideCrops)
         ? overrideCrops
-        : (rawVal ? rawVal.split(',').map(s => s.trim()).filter(Boolean) : []);
+        : (Array.isArray(state.candidateCrops) ? state.candidateCrops : []);
       try {
         const res = await fetch('/api/compare', {
           method: 'POST',
@@ -3027,7 +3019,7 @@
         ).join('') || '<li>No field observations confirmed yet.</li>';
         document.getElementById('records-memory-container').innerHTML = `
           <article class="clay-card rounded-[28px] p-5 space-y-2">
-            <h3 class="font-bold text-[16px] text-[#1d1b19]">Plot Profile (${escapeHtml(farm.farm_id)})</h3>
+            <h3 class="font-bold text-[16px] text-[#1d1b19]">Plot Profile</h3>
             <p class="text-sm text-[#404945]">Irrigation: <b>${escapeHtml(farm.irrigation_availability?.value)}</b> (${escapeHtml(farm.irrigation_availability?.evidence_label)})</p>
             <p class="text-sm text-[#404945]">Soil Feel: <b>${escapeHtml(farm.soil?.texture_feel?.value)}</b> (${escapeHtml(farm.soil?.texture_feel?.evidence_label)})</p>
             <p class="text-sm text-[#404945]">Waterlogging: <b>${escapeHtml(farm.soil?.waterlogging_duration?.value)}</b> (${escapeHtml(farm.soil?.waterlogging_duration?.evidence_label)})</p>
