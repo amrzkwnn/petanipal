@@ -350,6 +350,7 @@ def test_stitch_frontend_wiring_and_safety():
         "/api/compare",
         "/check-in",
         "/export",
+        "/sync",
         "/ws/voice/",
     ]:
         assert endpoint in html, f"Missing endpoint {endpoint} in index.html"
@@ -373,6 +374,9 @@ def test_stitch_frontend_wiring_and_safety():
     assert "update_audio_filter" in html
     assert "setVoiceFilterMode" in html
     assert "liveEchoTailUntil" in html
+    assert "petanipal_farm_memory_v1:" in html
+    assert "syncDeviceFarmToServer" in html
+    assert "syncAllDeviceFarmsOnStartup" in html
     assert Path("nasa/stitch_design/design-theme.json").exists()
 
 
@@ -460,6 +464,49 @@ def test_realtime_instructions_include_nasa_climate_and_rotation_context(tmp_pat
     assert t2 == "Kacang tanah sesuai untuk petak ini."
     assert base64.b64decode(a2) == b"\x01\x02\x03\x04"
     assert done2 is True
+
+
+def test_device_local_farm_memory_sync_restores_for_ai(tmp_path):
+    from fastapi.testclient import TestClient
+    import main as main_mod
+    from schemas import EvidenceLabel, IrrigationAvailability, LanguageCode
+    from services.memory_store import MemoryStore
+
+    # Device saves a farm locally, then connects to a fresh/cold-start server store
+    source_store = MemoryStore(storage_dir=tmp_path / "device_cache")
+    source_store.update_location("device_plot_1", "Kubang Pasu, Kedah", 6.2667, 100.4167)
+    source_store.apply_confirmed_fact("device_plot_1", "irrigation_availability", "sometimes")
+    saved_snapshot = source_store.apply_confirmed_fact("device_plot_1", "crop_history", "jagung manis")
+    assert saved_snapshot.irrigation_availability.value == IrrigationAvailability.SOMETIMES
+
+    cold_store = MemoryStore(storage_dir=tmp_path / "cold_server")
+    orig_store = main_mod.memory_store
+    main_mod.memory_store = cold_store
+    try:
+        client = TestClient(main_mod.app)
+        resp = client.post(
+            "/api/farms/device_plot_1/sync",
+            json=saved_snapshot.model_dump(mode="json"),
+        )
+        assert resp.status_code == 200
+        restored = resp.json()
+        assert restored["location"]["locality"] == "Kubang Pasu, Kedah"
+        assert restored["irrigation_availability"]["value"] == "sometimes"
+        assert restored["crop_history"][0]["raw_crop_name"] == "jagung manis"
+
+        # Verify Realtime AI instructions immediately refer to the restored device memory
+        rt_text = main_mod.get_realtime_service()._build_instructions(
+            language=LanguageCode.MS,
+            libraries=main_mod.libraries,
+            memory_store=cold_store,
+            farm_id="device_plot_1",
+            allow_network=False,
+        )
+        assert "Kubang Pasu, Kedah" in rt_text
+        assert "jagung manis" in rt_text
+        assert "sometimes" in rt_text
+    finally:
+        main_mod.memory_store = orig_store
     assert Path("nasa/stitch_design/01-farmpal-entrance-login.html").exists()
     assert Path("nasa/stitch_design/02-pal-farm-selection.html").exists()
     assert Path("nasa/stitch_design/03-pal-answer-confirm.html").exists()

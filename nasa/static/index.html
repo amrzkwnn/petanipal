@@ -957,8 +957,112 @@
       return h;
     }
 
+    const DEVICE_MEMORY_PREFIX = 'petanipal_farm_memory_v1:';
+    const DEVICE_FARMS_KEY = 'petanipal_device_farms_v1';
+    const DEVICE_ACTIVE_FARM_KEY = 'petanipal_active_farm_id_v1';
+
+    function getLocalFarmsRegistry() {
+      try {
+        const raw = localStorage.getItem(DEVICE_FARMS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function getLocalFarmMemory(farmId) {
+      if (!farmId) return null;
+      try {
+        const raw = localStorage.getItem(DEVICE_MEMORY_PREFIX + farmId);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function saveLocalFarmMemory(farm) {
+      if (!farm || !farm.farm_id) return;
+      try {
+        localStorage.setItem(DEVICE_MEMORY_PREFIX + farm.farm_id, JSON.stringify(farm));
+        const reg = getLocalFarmsRegistry();
+        const prettyName = farm.farm_id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const entry = {
+          farm_id: farm.farm_id,
+          farm_name: prettyName,
+          locality: farm.location?.locality || 'Sungai Petani, Kedah',
+        };
+        const idx = reg.findIndex(f => f.farm_id === farm.farm_id);
+        if (idx >= 0) {
+          reg[idx] = entry;
+        } else {
+          reg.push(entry);
+        }
+        localStorage.setItem(DEVICE_FARMS_KEY, JSON.stringify(reg));
+      } catch (e) {}
+    }
+
+    function removeLocalFarmMemory(farmId) {
+      if (!farmId) return;
+      try {
+        localStorage.removeItem(DEVICE_MEMORY_PREFIX + farmId);
+        const reg = getLocalFarmsRegistry().filter(f => f.farm_id !== farmId);
+        localStorage.setItem(DEVICE_FARMS_KEY, JSON.stringify(reg));
+        if (localStorage.getItem(DEVICE_ACTIVE_FARM_KEY) === farmId) {
+          localStorage.removeItem(DEVICE_ACTIVE_FARM_KEY);
+        }
+      } catch (e) {}
+    }
+
+    async function syncDeviceFarmToServer(farmId) {
+      const localFarm = getLocalFarmMemory(farmId);
+      if (localFarm) {
+        try {
+          const res = await fetch(`/api/farms/${encodeURIComponent(farmId)}/sync`, {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify(localFarm),
+          });
+          if (res.ok) {
+            const merged = await res.json();
+            saveLocalFarmMemory(merged);
+            return merged;
+          }
+        } catch (e) {}
+        return localFarm;
+      }
+      const res = await fetch(`/api/farms/${encodeURIComponent(farmId)}`, { headers: authHeaders() });
+      const farm = await res.json();
+      saveLocalFarmMemory(farm);
+      return farm;
+    }
+
+    async function refreshDeviceFarmCache(farmId) {
+      try {
+        const res = await fetch(`/api/farms/${encodeURIComponent(farmId)}`, { headers: authHeaders() });
+        if (res.ok) {
+          const farm = await res.json();
+          saveLocalFarmMemory(farm);
+          return farm;
+        }
+      } catch (e) {}
+      return getLocalFarmMemory(farmId);
+    }
+
+    async function syncAllDeviceFarmsOnStartup() {
+      const savedIds = new Set(getLocalFarmsRegistry().map(f => f.farm_id));
+      savedIds.add(state.farmId);
+      await Promise.allSettled(
+        Array.from(savedIds).map(fid => syncDeviceFarmToServer(fid))
+      );
+    }
+
     async function initApp() {
       try {
+        const savedActive = localStorage.getItem(DEVICE_ACTIVE_FARM_KEY);
+        if (savedActive) {
+          state.farmId = savedActive;
+        }
         const res = await fetch('/api/config');
         const cfg = await res.json();
         state.supabaseEnabled = Boolean(cfg.supabase_enabled);
@@ -968,6 +1072,7 @@
       } catch (e) {
         console.warn('Config fallback:', e);
       }
+      syncAllDeviceFarmsOnStartup().catch(() => {});
       setupEarthHoldInteraction();
     }
 
@@ -1017,6 +1122,7 @@
         setTimeout(async () => {
           document.getElementById('screen-entrance').classList.add('hidden');
           document.getElementById('screen-app').classList.remove('hidden');
+          await syncAllDeviceFarmsOnStartup();
           await loadFarmsList();
           await selectFarm(state.farmId, false);
         }, 450);
@@ -1078,6 +1184,11 @@
       } catch (e) {}
 
       const merged = [...DEFAULT_FARMS];
+      getLocalFarmsRegistry().forEach(f => {
+        if (!merged.some(m => m.farm_id === f.farm_id)) {
+          merged.push(f);
+        }
+      });
       apiFarms.forEach(f => {
         if (!merged.some(m => m.farm_id === f.farm_id)) {
           merged.push(f);
@@ -1130,9 +1241,9 @@
 
     async function selectFarm(farmId, closeFarmCard = true) {
       state.farmId = farmId;
+      try { localStorage.setItem(DEVICE_ACTIVE_FARM_KEY, farmId); } catch (e) {}
       try {
-        const res = await fetch(`/api/farms/${encodeURIComponent(farmId)}`, { headers: authHeaders() });
-        const farm = await res.json();
+        const farm = await syncDeviceFarmToServer(farmId);
         document.getElementById('settings-locality').value = farm.location?.locality || 'Sungai Petani, Kedah';
         document.getElementById('settings-lat').value = farm.location?.latitude || '';
         document.getElementById('settings-lon').value = farm.location?.longitude || '';
@@ -1276,6 +1387,9 @@
           }),
         });
         const data = await res.json();
+        if (data.farm_memory) {
+          saveLocalFarmMemory(data.farm_memory);
+        }
         document.getElementById('pending-confirm-box').classList.add('hidden');
         state.pendingConfirmation = null;
         if (data.next_question) {
@@ -1749,6 +1863,10 @@
         return;
       }
 
+      try {
+        await syncDeviceFarmToServer(state.farmId);
+      } catch (e) {}
+
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const tokenQuery = state.accessToken ? `&token=${encodeURIComponent(state.accessToken)}` : '';
       const wsUrl = `${proto}//${window.location.host}/ws/voice/${encodeURIComponent(state.farmId)}/${encodeURIComponent(state.sessionId)}?language=${state.language}&noise_mode=${encodeURIComponent(state.voiceFilterMode)}${tokenQuery}`;
@@ -1857,6 +1975,7 @@
             if (!responseUpdatedRotation && palEl.textContent) {
               syncSuggestedCropFromAssistantText(palEl.textContent);
             }
+            refreshDeviceFarmCache(state.farmId);
             if (liveActiveSources.length === 0) {
               liveSubMode = 'listening';
               setListeningIndicator('listening');
@@ -2232,8 +2351,7 @@
 
     async function openRecordsView() {
       try {
-        const res = await fetch(`/api/farms/${encodeURIComponent(state.farmId)}`, { headers: authHeaders() });
-        const farm = await res.json();
+        const farm = await syncDeviceFarmToServer(state.farmId);
         const cropsHtml = (farm.crop_history || []).map(c =>
           `<li>${escapeHtml(c.raw_crop_name)} <span class="px-2 py-0.5 rounded-full clay-badge text-[10px] font-bold">${escapeHtml(c.evidence_label)}</span></li>`
         ).join('') || '<li>No crop history confirmed yet.</li>';
@@ -2337,7 +2455,7 @@
         Number.isFinite(latVal) ? latVal : null,
         Number.isFinite(lonVal) ? lonVal : null
       );
-      await fetch(`/api/farms/${encodeURIComponent(state.farmId)}/location`, {
+      const locRes = await fetch(`/api/farms/${encodeURIComponent(state.farmId)}/location`, {
         method: 'POST',
         headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
@@ -2346,6 +2464,10 @@
           longitude: Number.isFinite(lonVal) ? lonVal : null,
         }),
       });
+      if (locRes.ok) {
+        const updatedFarm = await locRes.json();
+        saveLocalFarmMemory(updatedFarm);
+      }
       await runComparison();
       notifyRealtimeContextRefresh();
     }
@@ -2374,10 +2496,12 @@
     }
 
     async function deleteCurrentFarm() {
-      await fetch(`/api/farms/${encodeURIComponent(state.farmId)}`, {
+      const targetId = state.farmId;
+      await fetch(`/api/farms/${encodeURIComponent(targetId)}`, {
         method: 'DELETE',
         headers: authHeaders(),
       });
+      removeLocalFarmMemory(targetId);
       await selectFarm('green_valley_plot', false);
       switchTopTab('pal');
     }

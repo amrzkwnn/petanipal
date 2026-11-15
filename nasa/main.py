@@ -326,6 +326,19 @@ async def get_farm(
     return memory_store.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
 
 
+@app.post("/api/farms/{farm_id}/sync", response_model=FarmMemory)
+async def sync_farm_memory(
+    farm_id: str,
+    payload: FarmMemory,
+    auth: Annotated[tuple[Optional[str], Optional[str]], Depends(get_auth_context)],
+) -> FarmMemory:
+    """Restore or merge a device-local FarmMemory snapshot into the active backend store."""
+    user_id, access_token = auth
+    if hasattr(memory_store, "sync_farm_memory"):
+        return memory_store.sync_farm_memory(farm_id=farm_id, incoming=payload)
+    return memory_store.get_or_create_farm(farm_id, user_id=user_id, access_token=access_token)
+
+
 def update_farm_location_sync(
     farm_id: str,
     payload: LocationUpdateRequest,

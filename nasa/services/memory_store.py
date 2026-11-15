@@ -99,6 +99,79 @@ class MemoryStore:
             return [{"farm_id": default_farm.farm_id, "farm_name": "Farm 001", "locality": default_farm.location.locality}]
         return farms
 
+    def sync_farm_memory(self, farm_id: str, incoming: FarmMemory) -> FarmMemory:
+        """Restore or merge a device-local FarmMemory snapshot so server/AI match the device."""
+        path = self._farm_path(farm_id)
+        had_saved = path.exists() or (farm_id in self._farms)
+        normalized = incoming.model_copy(update={"farm_id": farm_id})
+
+        if not had_saved:
+            self._farms[farm_id] = normalized
+            self._save_farm(normalized)
+            return normalized
+
+        current = self.get_or_create_farm(farm_id)
+
+        def _pick_tracked(cur_tv: TrackedValue[Any], inc_tv: TrackedValue[Any]) -> TrackedValue[Any]:
+            cur_known = cur_tv.evidence_label != EvidenceLabel.UNKNOWN
+            inc_known = inc_tv.evidence_label != EvidenceLabel.UNKNOWN
+            if inc_known and not cur_known:
+                return inc_tv
+            if cur_known and not inc_known:
+                return cur_tv
+            if inc_known and cur_known:
+                cur_dt = cur_tv.confirmed_at or datetime.min.replace(tzinfo=timezone.utc)
+                inc_dt = inc_tv.confirmed_at or datetime.min.replace(tzinfo=timezone.utc)
+                if cur_dt.tzinfo is None:
+                    cur_dt = cur_dt.replace(tzinfo=timezone.utc)
+                if inc_dt.tzinfo is None:
+                    inc_dt = inc_dt.replace(tzinfo=timezone.utc)
+                return inc_tv if inc_dt >= cur_dt else cur_tv
+            return cur_tv
+
+        current.irrigation_availability = _pick_tracked(
+            current.irrigation_availability, normalized.irrigation_availability
+        )
+        current.labour_availability = _pick_tracked(
+            current.labour_availability, normalized.labour_availability
+        )
+        current.soil.texture_feel = _pick_tracked(current.soil.texture_feel, normalized.soil.texture_feel)
+        current.soil.waterlogging_duration = _pick_tracked(
+            current.soil.waterlogging_duration, normalized.soil.waterlogging_duration
+        )
+        current.soil.flooded_last_season = _pick_tracked(
+            current.soil.flooded_last_season, normalized.soil.flooded_last_season
+        )
+        current.soil.ph = _pick_tracked(current.soil.ph, normalized.soil.ph)
+        current.soil.soil_test_status = _pick_tracked(
+            current.soil.soil_test_status, normalized.soil.soil_test_status
+        )
+        current.soil.trouble_spot = _pick_tracked(current.soil.trouble_spot, normalized.soil.trouble_spot)
+
+        if normalized.location.latitude is not None and current.location.latitude is None:
+            current.location = normalized.location
+
+        seen_crops = {(c.season.lower(), c.raw_crop_name.lower()) for c in current.crop_history}
+        for c in normalized.crop_history:
+            key = (c.season.lower(), c.raw_crop_name.lower())
+            if key not in seen_crops:
+                seen_crops.add(key)
+                current.crop_history.append(c)
+
+        seen_obs = {
+            (o.zone.lower(), o.event_type.lower(), o.observation.lower())
+            for o in current.field_observations
+        }
+        for o in normalized.field_observations:
+            key = (o.zone.lower(), o.event_type.lower(), o.observation.lower())
+            if key not in seen_obs:
+                seen_obs.add(key)
+                current.field_observations.append(o)
+
+        self._farms[farm_id] = current
+        self._save_farm(current)
+        return current
+
     def update_location(
         self,
         farm_id: str,
