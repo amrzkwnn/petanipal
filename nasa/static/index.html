@@ -1571,7 +1571,7 @@
       compressor.connect(filteredDest);
 
       // 5. Adaptive noise-floor + SNR near-field gate state
-      let noiseFloorRms = 0.002;
+      let noiseFloorRms = 0.001;
       let gateOpen = false;
       let hangoverUntil = 0;
       const preRoll = [];
@@ -1593,30 +1593,35 @@
           const rms = Math.sqrt(sum / inputData.length);
           const isStrict = state.voiceFilterMode === 'strict';
           const palSpeakingBoost = liveActiveSources.length > 0 ? 1.45 : 1.0;
-          const snrMult = (isStrict ? 1.8 : 1.5) * palSpeakingBoost;
-          const absFloor = (isStrict ? 0.004 : 0.0025) * palSpeakingBoost;
+          const snrMult = (isStrict ? 1.6 : 1.35) * palSpeakingBoost;
+          const absFloor = (isStrict ? 0.0015 : 0.0008) * palSpeakingBoost;
           const openThresh = Math.max(absFloor, noiseFloorRms * snrMult);
-          const closeThresh = openThresh * 0.65;
+          const closeThresh = openThresh * 0.6;
           const now = performance.now();
 
           if (rms >= openThresh) {
             gateOpen = true;
-            hangoverUntil = now + 350;
+            hangoverUntil = now + 400;
           } else if (gateOpen && rms >= closeThresh) {
-            hangoverUntil = now + 260;
+            hangoverUntil = now + 300;
           } else if (gateOpen && now > hangoverUntil) {
             gateOpen = false;
           }
 
           if (!gateOpen) {
             // Track rolling ambient background floor smoothly
-            noiseFloorRms = Math.min(0.03, Math.max(0.001, noiseFloorRms * 0.96 + rms * 0.04));
+            noiseFloorRms = Math.min(0.02, Math.max(0.0005, noiseFloorRms * 0.96 + rms * 0.04));
             preRoll.push(new Float32Array(inputData));
             if (preRoll.length > MAX_PREROLL_FRAMES) preRoll.shift();
+            const attenuated = new Float32Array(inputData.length);
+            for (let i = 0; i < inputData.length; i++) {
+              attenuated[i] = inputData[i] * 0.25;
+            }
             return {
               passed: false,
-              ambientDetected: rms > 0.002,
-              frames: [new Float32Array(inputData.length)], // digital silence
+              rms,
+              ambientDetected: rms > 0.0012,
+              frames: [attenuated],
             };
           }
 
@@ -1627,6 +1632,7 @@
           outFrames.push(inputData);
           return {
             passed: true,
+            rms,
             ambientDetected: false,
             frames: outFrames,
           };
@@ -1993,6 +1999,8 @@
           liveSource = liveFilterGraph.source;
           liveProcessor = liveAudioCtx.createScriptProcessor(2048, 1, 1);
 
+          let zeroFrames = 0;
+          let warnedSilentMic = false;
           liveProcessor.onaudioprocess = ev => {
             if (!state.isListening || !state.realtimeWs || state.realtimeWs.readyState !== WebSocket.OPEN) return;
             if (liveSubMode === 'speaking_pal' || liveActiveSources.length > 0 || Date.now() < liveEchoTailUntil) {
@@ -2000,6 +2008,22 @@
             }
             const inputData = ev.inputBuffer.getChannelData(0);
             const gated = liveFilterGraph.processFrame(inputData);
+            if (gated.rms < 0.00005) {
+              zeroFrames += 1;
+              if (zeroFrames >= 30 && !warnedSilentMic) {
+                warnedSilentMic = true;
+                document.getElementById('reassurance-status-text').textContent =
+                  state.language === 'ms'
+                    ? 'Tiada audio mikrofon dikesan — semak input mikrofon peranti/pelayar'
+                    : 'No mic audio detected — check Windows/browser microphone input';
+              }
+            } else {
+              zeroFrames = 0;
+              if (warnedSilentMic) {
+                warnedSilentMic = false;
+                document.getElementById('reassurance-status-text').textContent = '';
+              }
+            }
             if (!gated.passed && gated.ambientDetected && liveSubMode === 'listening') {
               setListeningIndicator('ambient_filtered');
             }
